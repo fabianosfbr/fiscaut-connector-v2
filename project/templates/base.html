@@ -1,0 +1,14 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}{% endblock title %}</title>
+    <link rel="stylesheet" href="{% static 'css/input.css' %}" />
+  </head>
+  <body class="text-gray-800 bg-gray-100">
+    {% block content %}{% endblock content %}
+  </body>
+</html>

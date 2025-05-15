@@ -1,0 +1,156 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}Logs - Painel Administrativo{% endblock %}
+
+{% block page_title %}Logs{% endblock %}
+{% block page_subtitle %}Monitoramento de logs do sistema{% endblock %}
+
+{% block content %}
+<div class="mb-8 admin-card">
+    <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-semibold text-gray-900">Logs do Sistema</h3>
+        <div class="flex items-center gap-2">
+            <div class="relative">
+                <select class="py-2 pr-10 text-sm admin-input">
+                    <option value="all">Todos os níveis</option>
+                    <option value="info">Informação</option>
+                    <option value="success">Sucesso</option>
+                    <option value="warning">Alerta</option>
+                    <option value="error">Erro</option>
+                </select>
+            </div>
+            <button class="text-sm admin-btn-secondary">
+                <i data-feather="download" class="w-4 h-4"></i>
+                Exportar
+            </button>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        {% for log in logs %}
+        <div class="flex items-start gap-3 p-4 {% if log.level == 'error' %}bg-red-50{% elif log.level == 'warning' %}bg-amber-50{% elif log.level == 'success' %}bg-emerald-50{% else %}bg-blue-50{% endif %} rounded-lg">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 {% if log.level == 'error' %}bg-red-100 text-red-600{% elif log.level == 'warning' %}bg-amber-100 text-amber-600{% elif log.level == 'success' %}bg-emerald-100 text-emerald-600{% else %}bg-blue-100 text-blue-600{% endif %}">
+                {% if log.level == 'error' %}
+                <i data-feather="alert-circle" class="w-4 h-4"></i>
+                {% elif log.level == 'warning' %}
+                <i data-feather="alert-triangle" class="w-4 h-4"></i>
+                {% elif log.level == 'success' %}
+                <i data-feather="check-circle" class="w-4 h-4"></i>
+                {% else %}
+                <i data-feather="info" class="w-4 h-4"></i>
+                {% endif %}
+            </div>
+            <div class="flex-1">
+                <div class="flex items-start justify-between">
+                    <p class="text-sm font-medium {% if log.level == 'error' %}text-red-800{% elif log.level == 'warning' %}text-amber-800{% elif log.level == 'success' %}text-emerald-800{% else %}text-blue-800{% endif %}">
+                        {{ log.message }}
+                    </p>
+                    <span class="ml-4 text-xs text-gray-500 whitespace-nowrap">{{ log.timestamp }}</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">ID: {{ forloop.counter }}</p>
+            </div>
+        </div>
+        {% empty %}
+        <div class="py-6 text-center">
+            <p class="text-gray-500">Nenhum log encontrado</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Paginação -->
+    <div class="flex items-center justify-between mt-6">
+        <p class="text-sm text-gray-500">Mostrando 1-4 de 4 registros</p>
+        <div class="flex space-x-1">
+            <button class="px-3 py-1 text-sm text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Anterior
+            </button>
+            <button class="px-3 py-1 text-sm text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Próxima
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Insights -->
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <!-- Resumo de Logs -->
+    <div class="admin-card">
+        <h3 class="mb-6 text-lg font-semibold text-gray-900">Resumo de Logs</h3>
+        <div class="space-y-4">
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium text-gray-700">Informações</span>
+                    <span class="text-sm font-medium text-gray-700">1</span>
+                </div>
+                <div class="w-full h-2 bg-gray-200 rounded-full">
+                    <div class="h-2 bg-blue-500 rounded-full" style="width: 25%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium text-gray-700">Sucessos</span>
+                    <span class="text-sm font-medium text-gray-700">1</span>
+                </div>
+                <div class="w-full h-2 bg-gray-200 rounded-full">
+                    <div class="h-2 rounded-full bg-emerald-500" style="width: 25%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium text-gray-700">Alertas</span>
+                    <span class="text-sm font-medium text-gray-700">1</span>
+                </div>
+                <div class="w-full h-2 bg-gray-200 rounded-full">
+                    <div class="h-2 rounded-full bg-amber-500" style="width: 25%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium text-gray-700">Erros</span>
+                    <span class="text-sm font-medium text-gray-700">1</span>
+                </div>
+                <div class="w-full h-2 bg-gray-200 rounded-full">
+                    <div class="h-2 bg-red-500 rounded-full" style="width: 25%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configurações de Logs -->
+    <div class="admin-card">
+        <h3 class="mb-4 text-lg font-semibold text-gray-900">Configurações de Logs</h3>
+        <p class="mb-4 text-sm text-gray-500">Configure o nível de detalhe e o comportamento dos logs.</p>
+        
+        <form class="space-y-4">
+            <div>
+                <label for="log_level" class="admin-label">Nível de Log</label>
+                <select id="log_level" class="admin-input">
+                    <option value="debug">Debug</option>
+                    <option value="info" selected>Informação</option>
+                    <option value="warning">Alerta</option>
+                    <option value="error">Erro</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="admin-label">Arquivar Logs Automaticamente</label>
+                <div class="flex items-center mt-2">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" value="" class="sr-only peer" checked>
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">Habilitado</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="pt-2">
+                <button type="submit" class="admin-btn-primary">
+                    <i data-feather="save" class="w-4 h-4"></i>
+                    Salvar Configurações
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

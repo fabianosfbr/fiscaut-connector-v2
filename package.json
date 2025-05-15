@@ -1,0 +1,17 @@
+{
+  "name": "fiscaut-connector-v2",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i ./project/static/css/input.css -o ./project/static/css/output.css --minify",
+    "watch:css": "tailwindcss -i ./project/static/css/input.css -o ./project/static/css/output.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "tailwindcss": "^3.4.17"
+  }
+}

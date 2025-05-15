@@ -1,0 +1,174 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}Configurações - Painel Administrativo{% endblock %}
+
+{% block page_title %}Configurações{% endblock %}
+{% block page_subtitle %}Gerenciamento das configurações do sistema{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2">
+        <!-- Configurações Gerais -->
+        <div class="admin-card mb-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-6">Configurações Gerais</h3>
+            
+            <form class="space-y-4">
+                <div>
+                    <label for="site_name" class="admin-label">Nome do Sistema</label>
+                    <input type="text" id="site_name" class="admin-input" value="Fiscaut Connector">
+                </div>
+                
+                <div>
+                    <label for="admin_email" class="admin-label">Email do Administrador</label>
+                    <input type="email" id="admin_email" class="admin-input" value="admin@fiscaut.com.br">
+                </div>
+                
+                <div>
+                    <label for="timezone" class="admin-label">Fuso Horário</label>
+                    <select id="timezone" class="admin-input">
+                        <option value="America/Sao_Paulo" selected>America/Sao_Paulo</option>
+                        <option value="America/Manaus">America/Manaus</option>
+                        <option value="America/Fortaleza">America/Fortaleza</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="admin-label">Modo de Manutenção</label>
+                    <div class="flex items-center mt-2">
+                        <label class="inline-flex items-center">
+                            <input type="radio" name="maintenance_mode" value="0" class="text-indigo-600 focus:ring-indigo-500" checked>
+                            <span class="ml-2 text-sm text-gray-700">Desativado</span>
+                        </label>
+                        <label class="inline-flex items-center ml-6">
+                            <input type="radio" name="maintenance_mode" value="1" class="text-indigo-600 focus:ring-indigo-500">
+                            <span class="ml-2 text-sm text-gray-700">Ativado</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="pt-4">
+                    <button type="submit" class="admin-btn-primary">
+                        <i data-feather="save" class="w-4 h-4"></i>
+                        Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Integrações -->
+        <div class="admin-card">
+            <h3 class="text-lg font-semibold text-gray-900 mb-6">Integrações</h3>
+            
+            <div class="space-y-6">
+                <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                            <i data-feather="database" class="w-5 h-5 text-blue-600"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900">Sistema de Fiscalização</h4>
+                            <p class="text-sm text-gray-500">Configuração da API principal</p>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="px-2 py-1 text-xs rounded-full bg-emerald-50 text-emerald-600 font-medium">
+                            Ativo
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                            <i data-feather="mail" class="w-5 h-5 text-purple-600"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900">Servidor de Email</h4>
+                            <p class="text-sm text-gray-500">Configuração do SMTP</p>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="px-2 py-1 text-xs rounded-full bg-emerald-50 text-emerald-600 font-medium">
+                            Ativo
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mr-3">
+                            <i data-feather="bell" class="w-5 h-5 text-amber-600"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900">Notificações Push</h4>
+                            <p class="text-sm text-gray-500">Configuração das notificações</p>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="px-2 py-1 text-xs rounded-full bg-gray-50 text-gray-600 font-medium">
+                            Inativo
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Backup e Restauração -->
+    <div>
+        <div class="admin-card mb-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Backup e Restauração</h3>
+            <p class="text-sm text-gray-500 mb-4">Crie backups do sistema e restaure dados quando necessário.</p>
+            
+            <div class="space-y-3">
+                <button class="admin-btn-secondary w-full justify-center">
+                    <i data-feather="download" class="w-4 h-4"></i>
+                    Criar Backup Agora
+                </button>
+                
+                <button class="admin-btn-secondary w-full justify-center">
+                    <i data-feather="upload" class="w-4 h-4"></i>
+                    Restaurar Backup
+                </button>
+            </div>
+            
+            <div class="mt-6">
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Backups Automáticos</h4>
+                <div class="flex items-center">
+                    <label class="inline-flex relative items-center cursor-pointer">
+                        <input type="checkbox" value="" class="sr-only peer" checked>
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">Habilitado</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Limpeza de Dados -->
+        <div class="admin-card">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Limpeza de Dados</h3>
+            <p class="text-sm text-gray-500 mb-4">Limpe logs antigos e dados temporários para melhorar o desempenho.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="log_retention" class="admin-label">Reter Logs Por</label>
+                    <select id="log_retention" class="admin-input">
+                        <option value="7">7 dias</option>
+                        <option value="30" selected>30 dias</option>
+                        <option value="90">90 dias</option>
+                        <option value="365">1 ano</option>
+                    </select>
+                </div>
+                
+                <div class="pt-2">
+                    <button class="admin-btn-secondary w-full justify-center">
+                        <i data-feather="trash-2" class="w-4 h-4"></i>
+                        Limpar Dados Temporários
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
