@@ -63,67 +63,83 @@ class EmpresaSincronizacaoService:
         filters: Optional[Dict[str, Any]] = None,
         page_number: int = 1,
         page_size: int = 50,
-        filtro_sincronizacao: Optional[str] = None  # 'todas', 'habilitada', 'desabilitada'
+        filtro_sincronizacao: Optional[
+            str
+        ] = None,  # 'todas', 'habilitada', 'desabilitada'
     ) -> Dict[str, Any]:
         """
         Lista empresas do ODBC e adiciona o status de sincronização do Fiscaut.
         Permite filtrar por status de sincronização de forma eficiente.
         """
-        
+
         codi_emps_para_filtrar_odbc: Optional[List[int]] = None
         sinc_status_para_enriquecimento: Optional[bool] = None
 
-        if filtro_sincronizacao and filtro_sincronizacao != 'todas':
-            sinc_habilitada_desejada = filtro_sincronizacao == 'habilitada'
+        if filtro_sincronizacao and filtro_sincronizacao != "todas":
+            sinc_habilitada_desejada = filtro_sincronizacao == "habilitada"
             sinc_status_para_enriquecimento = sinc_habilitada_desejada
-            
-            codi_emps_para_filtrar_odbc = list(EmpresaSincronizacao.objects.filter(
-                habilitada_sincronizacao=sinc_habilitada_desejada
-            ).values_list('codi_emp', flat=True))
+
+            codi_emps_para_filtrar_odbc = list(
+                EmpresaSincronizacao.objects.filter(
+                    habilitada_sincronizacao=sinc_habilitada_desejada
+                ).values_list("codi_emp", flat=True)
+            )
 
             if not codi_emps_para_filtrar_odbc:
                 # Nenhuma empresa local corresponde a este status de sincronização,
                 # então não há nada a buscar no ODBC que corresponderia.
                 return {
-                    "success": True, "data": [], "total_records": 0, 
-                    "current_page": page_number, "page_size": page_size, "error": None
+                    "success": True,
+                    "data": [],
+                    "total_records": 0,
+                    "current_page": page_number,
+                    "page_size": page_size,
+                    "error": None,
                 }
-        
+
         # Chamar o ODBC manager, passando a lista de codi_emps se o filtro estiver ativo
         empresas_odbc_result = self.odbc_manager.list_empresas(
-            filters=filters, 
-            page_number=page_number, 
+            filters=filters,
+            page_number=page_number,
             page_size=page_size,
-            codi_emp_in_list=codi_emps_para_filtrar_odbc # Passa a lista aqui
+            codi_emp_in_list=codi_emps_para_filtrar_odbc,  # Passa a lista aqui
         )
 
         if not empresas_odbc_result.get("success"):
-            return empresas_odbc_result # Retorna o erro do ODBC
+            return empresas_odbc_result  # Retorna o erro do ODBC
 
         empresas_data = empresas_odbc_result.get("data", [])
 
         if not empresas_data:
-             return empresas_odbc_result # Nenhuma empresa do ODBC, retorna como está
+            return empresas_odbc_result  # Nenhuma empresa do ODBC, retorna como está
 
         # Enriquecer com o status de sincronização
         if sinc_status_para_enriquecimento is not None:
             # Se filtramos por status, todas as empresas retornadas devem ter esse status
             for emp in empresas_data:
-                emp['habilitada_sincronizacao'] = sinc_status_para_enriquecimento
+                emp["habilitada_sincronizacao"] = sinc_status_para_enriquecimento
         else:
             # Se o filtro era 'todas', precisamos buscar o status individualmente
-            codi_emps_encontrados_odbc = [emp.get('codi_emp') for emp in empresas_data if emp.get('codi_emp') is not None]
+            codi_emps_encontrados_odbc = [
+                emp.get("codi_emp")
+                for emp in empresas_data
+                if emp.get("codi_emp") is not None
+            ]
             if codi_emps_encontrados_odbc:
-                status_sincronizacao_map = self.get_status_sincronizacao_empresas(codi_emps_encontrados_odbc)
+                status_sincronizacao_map = self.get_status_sincronizacao_empresas(
+                    codi_emps_encontrados_odbc
+                )
                 for emp in empresas_data:
-                    cod_emp = emp.get('codi_emp')
+                    cod_emp = emp.get("codi_emp")
                     if cod_emp is not None:
-                        emp['habilitada_sincronizacao'] = status_sincronizacao_map.get(cod_emp, False)
-            else: # Caso raro: empresas_data não vazia, mas sem codi_emp
-                 for emp in empresas_data:
-                    emp['habilitada_sincronizacao'] = False # Default
+                        emp["habilitada_sincronizacao"] = status_sincronizacao_map.get(
+                            cod_emp, False
+                        )
+            else:  # Caso raro: empresas_data não vazia, mas sem codi_emp
+                for emp in empresas_data:
+                    emp["habilitada_sincronizacao"] = False  # Default
 
-        empresas_odbc_result['data'] = empresas_data
+        empresas_odbc_result["data"] = empresas_data
         return empresas_odbc_result
 
 
