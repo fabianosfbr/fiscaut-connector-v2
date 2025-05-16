@@ -53,7 +53,13 @@
                 <h3 class="text-sm font-medium text-gray-500">CNPJ</h3>
                 <p class="text-lg font-semibold text-gray-800">{{ empresa.cgce_emp|default:'N/A' }}</p>
             </div>
-            <div class="admin-info-card">
+            <div class="admin-info-card border-l-4"
+                 :class="{
+                     'border-green-500': habilitada, 
+                     'border-red-500': !habilitada,
+                     'bg-green-50': habilitada,  // Adicionando um leve fundo verde
+                     'bg-red-50': !habilitada    // Adicionando um leve fundo vermelho
+                 }">
                 <h3 class="text-sm font-medium text-gray-500">Status Sincronização</h3>
                 <span :class="{'admin-badge-success': habilitada, 'admin-badge-danger': !habilitada}" class="px-3 py-1 rounded-full text-sm font-medium">
                     <span x-text="habilitada ? 'Ativa' : 'Inativa'"></span>
