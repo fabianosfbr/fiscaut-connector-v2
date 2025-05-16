@@ -7,79 +7,586 @@
 {% block page_subtitle %}Gerenciamento de usuários do sistema{% endblock %}
 
 {% block content %}
-<div class="admin-card mb-8">
+<div class="admin-card mb-8" x-data="usersManagement()">
     <div class="flex justify-between items-center mb-6">
         <h3 class="text-lg font-semibold text-gray-900">Lista de Usuários</h3>
-        <button class="admin-btn-primary">
+        <button @click="openUserModal()" class="admin-btn-primary">
             <i data-feather="user-plus" class="w-4 h-4"></i>
             Adicionar Usuário
         </button>
+    </div>
+    
+    <!-- Filtros e busca -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <div class="relative flex-grow">
+            <input type="text" 
+                   x-model="searchTerm" 
+                   @input="filterUsers()"
+                   placeholder="Buscar usuários..." 
+                   class="admin-input pl-10">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <i data-feather="search" class="w-4 h-4 text-gray-400"></i>
+            </div>
+        </div>
+        <div class="flex gap-3 flex-shrink-0">
+            <select x-model="statusFilter" @change="filterUsers()" class="admin-input w-36">
+                <option value="all">Todos</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+            </select>
+            <select x-model="roleFilter" @change="filterUsers()" class="admin-input w-36">
+                <option value="all">Todos</option>
+                <option value="admin">Administradores</option>
+                <option value="user">Usuários</option>
+            </select>
+        </div>
     </div>
 
     <div class="overflow-x-auto">
         <table class="min-w-full bg-white rounded-lg">
             <thead>
                 <tr class="bg-gray-50 border-b border-gray-200">
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grupo</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button @click="sortBy('username')" class="flex items-center focus:outline-none">
+                            Usuário
+                            <template x-if="sortColumn === 'username'">
+                                <i :data-feather="sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'" class="w-3 h-3 ml-1"></i>
+                            </template>
+                        </button>
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button @click="sortBy('email')" class="flex items-center focus:outline-none">
+                            Email
+                            <template x-if="sortColumn === 'email'">
+                                <i :data-feather="sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'" class="w-3 h-3 ml-1"></i>
+                            </template>
+                        </button>
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button @click="sortBy('role')" class="flex items-center focus:outline-none">
+                            Grupo
+                            <template x-if="sortColumn === 'role'">
+                                <i :data-feather="sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'" class="w-3 h-3 ml-1"></i>
+                            </template>
+                        </button>
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button @click="sortBy('status')" class="flex items-center focus:outline-none">
+                            Status
+                            <template x-if="sortColumn === 'status'">
+                                <i :data-feather="sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'" class="w-3 h-3 ml-1"></i>
+                            </template>
+                        </button>
+                    </th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-                {% for user in users %}
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center mr-3">
-                                <i data-feather="user" class="w-4 h-4 text-gray-500"></i>
+                <template x-for="(user, index) in filteredUsers" :key="user.id">
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center mr-3">
+                                    <i data-feather="user" class="w-4 h-4 text-gray-500"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900" x-text="user.fullName || user.username"></p>
+                                    <p class="text-xs text-gray-500">@<span x-text="user.username"></span></p>
+                                </div>
                             </div>
-                            <div>
-                                <p class="text-sm font-medium text-gray-900">{{ user.get_full_name|default:user.username }}</p>
-                                <p class="text-xs text-gray-500">@{{ user.username }}</p>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="user.email"></td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 py-1 text-xs rounded-full font-medium"
+                                  :class="user.isAdmin ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600'">
+                                <span x-text="user.isAdmin ? 'Administrador' : 'Usuário'"></span>
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 py-1 text-xs rounded-full font-medium"
+                                  :class="user.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'">
+                                <span x-text="user.isActive ? 'Ativo' : 'Inativo'"></span>
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div class="flex justify-end gap-2">
+                                <button @click="openUserModal(user)" class="admin-btn-secondary text-xs px-3 py-1">
+                                    <i data-feather="edit-2" class="w-3 h-3"></i>
+                                    Editar
+                                </button>
+                                <button @click="confirmDelete(user)" class="bg-red-50 text-red-600 hover:bg-red-100 transition-colors rounded-md text-xs px-3 py-1 flex items-center">
+                                    <i data-feather="trash-2" class="w-3 h-3 mr-1"></i>
+                                    Excluir
+                                </button>
                             </div>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ user.email }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        {% if user.is_staff %}
-                            <span class="px-2 py-1 text-xs rounded-full bg-indigo-50 text-indigo-600 font-medium">
-                                Administrador
-                            </span>
-                        {% else %}
-                            <span class="px-2 py-1 text-xs rounded-full bg-blue-50 text-blue-600 font-medium">
-                                Usuário
-                            </span>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        {% if user.is_active %}
-                            <span class="px-2 py-1 text-xs rounded-full bg-emerald-50 text-emerald-600 font-medium">
-                                Ativo
-                            </span>
-                        {% else %}
-                            <span class="px-2 py-1 text-xs rounded-full bg-red-50 text-red-600 font-medium">
-                                Inativo
-                            </span>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="admin-btn-secondary text-xs px-3 py-1">
-                            <i data-feather="edit-2" class="w-3 h-3"></i>
-                            Editar
-                        </button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="filteredUsers.length === 0 && !isLoading">
                     <td colspan="5" class="px-6 py-10 text-center text-gray-500">
                         <p>Nenhum usuário encontrado</p>
                     </td>
                 </tr>
-                {% endfor %}
+                <tr x-show="isLoading">
+                    <td colspan="5" class="px-6 py-10 text-center">
+                        <svg class="animate-spin h-6 w-6 text-primary-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
+    
+    <!-- Paginação -->
+    <div class="flex justify-between items-center mt-6" x-show="totalPages > 0">
+        <div class="text-sm text-gray-600">
+            Mostrando <span x-text="(currentPage - 1) * pageSize + 1"></span> a 
+            <span x-text="Math.min(currentPage * pageSize, filteredUsers.length)"></span> de 
+            <span x-text="totalItems"></span> usuários
+        </div>
+        <div class="flex gap-2">
+            <button @click="currentPage = Math.max(1, currentPage - 1)" 
+                    :disabled="currentPage === 1"
+                    :class="{'opacity-50 cursor-not-allowed': currentPage === 1}"
+                    class="admin-btn-secondary px-3 py-1 text-xs">
+                <i data-feather="chevron-left" class="w-3 h-3"></i>
+                Anterior
+            </button>
+            <button @click="currentPage = Math.min(totalPages, currentPage + 1)" 
+                    :disabled="currentPage === totalPages"
+                    :class="{'opacity-50 cursor-not-allowed': currentPage === totalPages}"
+                    class="admin-btn-secondary px-3 py-1 text-xs">
+                Próximo
+                <i data-feather="chevron-right" class="w-3 h-3"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Modal de Usuário -->
+    <div x-show="showUserModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div @click.away="cancelEdit()" 
+             class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-4" x-text="currentUser.id ? 'Editar Usuário' : 'Adicionar Usuário'"></h3>
+            
+            <form @submit.prevent="saveUser" class="space-y-4">
+                <div>
+                    <label for="username" class="admin-label">Nome de Usuário</label>
+                    <input type="text" id="username" x-model="currentUser.username" class="admin-input" required>
+                </div>
+                
+                <div>
+                    <label for="fullName" class="admin-label">Nome Completo</label>
+                    <input type="text" id="fullName" x-model="currentUser.fullName" class="admin-input">
+                </div>
+                
+                <div>
+                    <label for="email" class="admin-label">Email</label>
+                    <input type="email" id="email" x-model="currentUser.email" class="admin-input" required>
+                </div>
+                
+                <div x-show="!currentUser.id">
+                    <label for="password" class="admin-label">Senha</label>
+                    <input type="password" id="password" x-model="currentUser.password" class="admin-input" :required="!currentUser.id">
+                </div>
+                
+                <div x-show="currentUser.id">
+                    <label for="password" class="admin-label">Nova Senha (deixe em branco para manter)</label>
+                    <input type="password" id="password" x-model="currentUser.password" class="admin-input">
+                </div>
+                
+                <div>
+                    <label class="admin-label">Perfil</label>
+                    <div class="mt-2 space-y-2">
+                        <label class="inline-flex items-center">
+                            <input type="radio" x-model="currentUser.isAdmin" :value="false" class="text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">Usuário</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" x-model="currentUser.isAdmin" :value="true" class="text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">Administrador</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="admin-label">Status</label>
+                    <div class="mt-2 space-y-2">
+                        <label class="inline-flex items-center">
+                            <input type="radio" x-model="currentUser.isActive" :value="true" class="text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">Ativo</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" x-model="currentUser.isActive" :value="false" class="text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">Inativo</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" @click="cancelEdit()" class="admin-btn-secondary">Cancelar</button>
+                    <button type="submit" class="admin-btn-primary" 
+                            :disabled="isSaving"
+                            :class="{'opacity-60 cursor-not-allowed': isSaving}">
+                        <template x-if="!isSaving">
+                            <i data-feather="save" class="w-4 h-4 mr-1"></i>
+                        </template>
+                        <template x-if="isSaving">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </template>
+                        <span x-text="isSaving ? 'Salvando...' : 'Salvar'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal de Confirmação de Exclusão -->
+    <div x-show="showDeleteModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div @click.away="showDeleteModal = false" 
+             class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Confirmar Exclusão</h3>
+            <p class="text-gray-600 mb-4">
+                Tem certeza que deseja excluir o usuário <span class="font-semibold" x-text="userToDelete?.username"></span>? 
+                Esta ação não pode ser desfeita.
+            </p>
+            
+            <div class="flex justify-end space-x-3">
+                <button @click="showDeleteModal = false" class="admin-btn-secondary">Cancelar</button>
+                <button @click="deleteUser()" 
+                        class="bg-red-600 hover:bg-red-700 text-white rounded-md px-4 py-2 text-sm" 
+                        :disabled="isDeleting"
+                        :class="{'opacity-60 cursor-not-allowed': isDeleting}">
+                    <template x-if="!isDeleting">
+                        <i data-feather="trash-2" class="w-4 h-4 mr-1"></i>
+                    </template>
+                    <template x-if="isDeleting">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </template>
+                    <span x-text="isDeleting ? 'Excluindo...' : 'Excluir'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('usersManagement', () => ({
+            allUsers: [],
+            filteredUsers: [],
+            searchTerm: '',
+            statusFilter: 'all',
+            roleFilter: 'all',
+            sortColumn: 'username',
+            sortDirection: 'asc',
+            isLoading: true,
+            currentPage: 1,
+            pageSize: 10,
+            
+            // Modal de usuário
+            showUserModal: false,
+            currentUser: {},
+            isSaving: false,
+            
+            // Modal de exclusão
+            showDeleteModal: false,
+            userToDelete: null,
+            isDeleting: false,
+            
+            init() {
+                this.loadUsers();
+            },
+            
+            get totalPages() {
+                return Math.ceil(this.totalItems / this.pageSize);
+            },
+            
+            get totalItems() {
+                return this.filteredUsers.length;
+            },
+            
+            get paginatedUsers() {
+                const start = (this.currentPage - 1) * this.pageSize;
+                const end = start + this.pageSize;
+                return this.filteredUsers.slice(start, end);
+            },
+            
+            async loadUsers() {
+                this.isLoading = true;
+                
+                // Simulação de chamada à API
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+                // Dados simulados ou do servidor
+                this.allUsers = [
+                    {% for user in users %}
+                    {
+                        id: {{ user.id }},
+                        username: '{{ user.username }}',
+                        fullName: '{{ user.get_full_name|default:"" }}',
+                        email: '{{ user.email }}',
+                        isAdmin: {% if user.is_staff %}true{% else %}false{% endif %},
+                        isActive: {% if user.is_active %}true{% else %}false{% endif %}
+                    },
+                    {% endfor %}
+                    // Adicionar alguns usuários de exemplo se não houver nenhum
+                    {% if not users %}
+                    {
+                        id: 1,
+                        username: 'admin',
+                        fullName: 'Administrador',
+                        email: 'admin@fiscaut.com.br',
+                        isAdmin: true,
+                        isActive: true
+                    },
+                    {
+                        id: 2,
+                        username: 'user1',
+                        fullName: 'Usuário Um',
+                        email: 'user1@fiscaut.com.br',
+                        isAdmin: false,
+                        isActive: true
+                    },
+                    {
+                        id: 3,
+                        username: 'user2',
+                        fullName: 'Usuário Dois',
+                        email: 'user2@fiscaut.com.br',
+                        isAdmin: false,
+                        isActive: false
+                    }
+                    {% endif %}
+                ];
+                
+                this.filterUsers();
+                this.isLoading = false;
+                
+                // Atualizar ícones
+                setTimeout(() => {
+                    feather.replace();
+                }, 100);
+            },
+            
+            filterUsers() {
+                let result = [...this.allUsers];
+                
+                // Filtro de busca
+                if (this.searchTerm) {
+                    const term = this.searchTerm.toLowerCase();
+                    result = result.filter(user => 
+                        user.username.toLowerCase().includes(term) || 
+                        user.fullName.toLowerCase().includes(term) || 
+                        user.email.toLowerCase().includes(term)
+                    );
+                }
+                
+                // Filtro de status
+                if (this.statusFilter !== 'all') {
+                    result = result.filter(user => 
+                        (this.statusFilter === 'active' && user.isActive) || 
+                        (this.statusFilter === 'inactive' && !user.isActive)
+                    );
+                }
+                
+                // Filtro de grupo
+                if (this.roleFilter !== 'all') {
+                    result = result.filter(user => 
+                        (this.roleFilter === 'admin' && user.isAdmin) || 
+                        (this.roleFilter === 'user' && !user.isAdmin)
+                    );
+                }
+                
+                // Ordenação
+                result.sort((a, b) => {
+                    let aVal, bVal;
+                    
+                    switch (this.sortColumn) {
+                        case 'username':
+                            aVal = a.username.toLowerCase();
+                            bVal = b.username.toLowerCase();
+                            break;
+                        case 'email':
+                            aVal = a.email.toLowerCase();
+                            bVal = b.email.toLowerCase();
+                            break;
+                        case 'role':
+                            aVal = a.isAdmin ? 1 : 0;
+                            bVal = b.isAdmin ? 1 : 0;
+                            break;
+                        case 'status':
+                            aVal = a.isActive ? 1 : 0;
+                            bVal = b.isActive ? 1 : 0;
+                            break;
+                        default:
+                            aVal = a.username.toLowerCase();
+                            bVal = b.username.toLowerCase();
+                    }
+                    
+                    if (this.sortDirection === 'asc') {
+                        return aVal > bVal ? 1 : -1;
+                    } else {
+                        return aVal < bVal ? 1 : -1;
+                    }
+                });
+                
+                this.filteredUsers = result;
+                this.currentPage = 1;
+                
+                // Atualizar ícones
+                setTimeout(() => {
+                    feather.replace();
+                }, 100);
+            },
+            
+            sortBy(column) {
+                if (this.sortColumn === column) {
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortColumn = column;
+                    this.sortDirection = 'asc';
+                }
+                
+                this.filterUsers();
+            },
+            
+            openUserModal(user = null) {
+                if (user) {
+                    // Editar usuário existente
+                    this.currentUser = { ...user, password: '' };
+                } else {
+                    // Adicionar novo usuário
+                    this.currentUser = {
+                        username: '',
+                        fullName: '',
+                        email: '',
+                        password: '',
+                        isAdmin: false,
+                        isActive: true
+                    };
+                }
+                
+                this.showUserModal = true;
+                
+                // Atualizar ícones
+                setTimeout(() => {
+                    feather.replace();
+                }, 100);
+            },
+            
+            cancelEdit() {
+                this.showUserModal = false;
+                this.currentUser = {};
+            },
+            
+            async saveUser() {
+                if (!this.currentUser.username || !this.currentUser.email) {
+                    alert('Nome de usuário e email são obrigatórios.');
+                    return;
+                }
+                
+                if (!this.currentUser.id && !this.currentUser.password) {
+                    alert('Senha é obrigatória para novos usuários.');
+                    return;
+                }
+                
+                this.isSaving = true;
+                
+                try {
+                    // Simulação de chamada à API
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    if (this.currentUser.id) {
+                        // Atualizar usuário existente
+                        const index = this.allUsers.findIndex(u => u.id === this.currentUser.id);
+                        if (index !== -1) {
+                            this.allUsers[index] = { ...this.currentUser };
+                            
+                            // Se a senha estiver vazia, não a altere
+                            if (!this.currentUser.password) {
+                                delete this.allUsers[index].password;
+                            }
+                        }
+                        
+                        console.log('Usuário atualizado:', this.currentUser);
+                    } else {
+                        // Adicionar novo usuário
+                        const newId = Math.max(0, ...this.allUsers.map(u => u.id)) + 1;
+                        const newUser = { ...this.currentUser, id: newId };
+                        this.allUsers.push(newUser);
+                        
+                        console.log('Novo usuário adicionado:', newUser);
+                    }
+                    
+                    this.filterUsers();
+                    this.showUserModal = false;
+                    this.currentUser = {};
+                } catch (error) {
+                    console.error('Erro ao salvar usuário:', error);
+                    alert('Erro ao salvar usuário. Tente novamente.');
+                } finally {
+                    this.isSaving = false;
+                }
+            },
+            
+            confirmDelete(user) {
+                this.userToDelete = user;
+                this.showDeleteModal = true;
+                
+                // Atualizar ícones
+                setTimeout(() => {
+                    feather.replace();
+                }, 100);
+            },
+            
+            async deleteUser() {
+                if (!this.userToDelete) return;
+                
+                this.isDeleting = true;
+                
+                try {
+                    // Simulação de chamada à API
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    
+                    // Remover o usuário do array
+                    this.allUsers = this.allUsers.filter(u => u.id !== this.userToDelete.id);
+                    
+                    this.filterUsers();
+                    this.showDeleteModal = false;
+                    this.userToDelete = null;
+                    
+                    console.log('Usuário excluído com sucesso');
+                } catch (error) {
+                    console.error('Erro ao excluir usuário:', error);
+                    alert('Erro ao excluir usuário. Tente novamente.');
+                } finally {
+                    this.isDeleting = false;
+                }
+            }
+        }));
+    });
+</script>
 {% endblock %} 

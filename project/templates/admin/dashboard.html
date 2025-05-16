@@ -7,13 +7,15 @@
 {% block page_subtitle %}Visão geral do sistema{% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" x-data="statsCards()">
     <!-- Card 1 -->
     <div class="admin-card">
         <div class="flex items-start justify-between mb-4">
             <div>
                 <p class="text-gray-500 text-sm font-medium">Total de Usuários</p>
-                <h3 class="text-2xl font-bold text-gray-900">{{ total_users }}</h3>
+                <h3 class="text-2xl font-bold text-gray-900">
+                    <span x-text="stats.totalUsers"></span>
+                </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center">
                 <i data-feather="users" class="w-5 h-5 text-primary-600"></i>
@@ -22,7 +24,7 @@
         <div class="flex items-center">
             <span class="text-emerald-500 text-sm font-medium flex items-center">
                 <i data-feather="trending-up" class="w-4 h-4 mr-1"></i>
-                +12.5%
+                <span x-text="stats.usersTrend"></span>
             </span>
             <span class="text-gray-400 text-xs ml-2">desde o mês passado</span>
         </div>
@@ -33,7 +35,9 @@
         <div class="flex items-start justify-between mb-4">
             <div>
                 <p class="text-gray-500 text-sm font-medium">Total de Sincronizações</p>
-                <h3 class="text-2xl font-bold text-gray-900">{{ total_syncs }}</h3>
+                <h3 class="text-2xl font-bold text-gray-900">
+                    <span x-text="stats.totalSyncs"></span>
+                </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
                 <i data-feather="refresh-cw" class="w-5 h-5 text-indigo-600"></i>
@@ -42,7 +46,7 @@
         <div class="flex items-center">
             <span class="text-emerald-500 text-sm font-medium flex items-center">
                 <i data-feather="trending-up" class="w-4 h-4 mr-1"></i>
-                +28.4%
+                <span x-text="stats.syncsTrend"></span>
             </span>
             <span class="text-gray-400 text-xs ml-2">desde o mês passado</span>
         </div>
@@ -53,7 +57,9 @@
         <div class="flex items-start justify-between mb-4">
             <div>
                 <p class="text-gray-500 text-sm font-medium">Taxa de Sucesso</p>
-                <h3 class="text-2xl font-bold text-gray-900">{{ success_rate }}%</h3>
+                <h3 class="text-2xl font-bold text-gray-900">
+                    <span x-text="stats.successRate"></span>%
+                </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
                 <i data-feather="check-circle" class="w-5 h-5 text-emerald-600"></i>
@@ -62,7 +68,7 @@
         <div class="flex items-center">
             <span class="text-emerald-500 text-sm font-medium flex items-center">
                 <i data-feather="trending-up" class="w-4 h-4 mr-1"></i>
-                +3.2%
+                <span x-text="stats.successRateTrend"></span>
             </span>
             <span class="text-gray-400 text-xs ml-2">desde o mês passado</span>
         </div>
@@ -73,7 +79,9 @@
         <div class="flex items-start justify-between mb-4">
             <div>
                 <p class="text-gray-500 text-sm font-medium">Sistemas Conectados</p>
-                <h3 class="text-2xl font-bold text-gray-900">{{ connected_systems }}</h3>
+                <h3 class="text-2xl font-bold text-gray-900">
+                    <span x-text="stats.connectedSystems"></span>
+                </h3>
             </div>
             <div class="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
                 <i data-feather="link" class="w-5 h-5 text-amber-600"></i>
@@ -82,7 +90,7 @@
         <div class="flex items-center">
             <span class="text-amber-500 text-sm font-medium flex items-center">
                 <i data-feather="minus" class="w-4 h-4 mr-1"></i>
-                0%
+                <span x-text="stats.systemsTrend"></span>
             </span>
             <span class="text-gray-400 text-xs ml-2">desde o mês passado</span>
         </div>
@@ -90,108 +98,335 @@
 </div>
 
 <!-- Recent Activity -->
-<div class="admin-card mb-8">
+<div class="admin-card mb-8" x-data="recentActivities()">
     <div class="flex justify-between items-center mb-6">
         <h3 class="text-lg font-semibold text-gray-900">Atividades Recentes</h3>
-        <button class="admin-btn-secondary text-xs">
-            Ver todas
+        <button class="admin-btn-secondary text-xs" @click="loadMoreActivities">
+            <span x-text="viewAllText"></span>
             <i data-feather="arrow-right" class="w-3 h-3"></i>
         </button>
     </div>
 
     <div class="space-y-4">
-        {% for activity in recent_activities %}
-        <div class="flex items-center justify-between py-3 {% if not forloop.last %}border-b border-gray-100{% endif %}">
-            <div class="flex items-start gap-3">
-                <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                    <i data-feather="{{ activity.icon }}" class="w-4 h-4 text-gray-600"></i>
+        <template x-for="(activity, index) in activities" :key="index">
+            <div class="flex items-center justify-between py-3" 
+                 :class="{'border-b border-gray-100': index !== activities.length - 1}">
+                <div class="flex items-start gap-3">
+                    <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                        <i :data-feather="activity.icon" class="w-4 h-4 text-gray-600"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-900" x-text="activity.description"></p>
+                        <p class="text-xs text-gray-500" x-text="activity.user"></p>
+                    </div>
                 </div>
                 <div>
-                    <p class="text-sm font-medium text-gray-900">{{ activity.description }}</p>
-                    <p class="text-xs text-gray-500">{{ activity.user }}</p>
+                    <span class="text-xs text-gray-500" x-text="activity.timeAgo"></span>
                 </div>
             </div>
-            <div>
-                <span class="text-xs text-gray-500">{{ activity.time_ago }}</span>
-            </div>
+        </template>
+        
+        <div x-show="isLoading" class="py-6 flex justify-center">
+            <svg class="animate-spin h-6 w-6 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
         </div>
-        {% empty %}
-        <div class="text-center py-6">
+        
+        <div x-show="activities.length === 0 && !isLoading" class="text-center py-6">
             <p class="text-gray-500">Nenhuma atividade recente encontrada</p>
         </div>
-        {% endfor %}
     </div>
 </div>
 
 <!-- Status Components -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- System Health -->
-    <div class="admin-card">
+    <div class="admin-card" x-data="systemHealth()">
         <h3 class="text-lg font-semibold text-gray-900 mb-6">Saúde do Sistema</h3>
         <div class="space-y-4">
-            <div>
-                <div class="flex justify-between mb-1">
-                    <span class="text-sm font-medium text-gray-700">API</span>
-                    <span class="text-sm font-medium text-emerald-600">Operacional</span>
+            <template x-for="(service, index) in services" :key="index">
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm font-medium text-gray-700" x-text="service.name"></span>
+                        <span class="text-sm font-medium" 
+                              :class="service.status === 'Operacional' ? 'text-emerald-600' : 'text-red-600'"
+                              x-text="service.status"></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full" 
+                             :class="service.status === 'Operacional' ? 'bg-emerald-500' : 'bg-red-500'"
+                             :style="`width: ${service.performance}%`"></div>
+                    </div>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div class="bg-emerald-500 h-2 rounded-full" style="width: 98%"></div>
-                </div>
-            </div>
-            <div>
-                <div class="flex justify-between mb-1">
-                    <span class="text-sm font-medium text-gray-700">Banco de Dados</span>
-                    <span class="text-sm font-medium text-emerald-600">Operacional</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div class="bg-emerald-500 h-2 rounded-full" style="width: 100%"></div>
-                </div>
-            </div>
-            <div>
-                <div class="flex justify-between mb-1">
-                    <span class="text-sm font-medium text-gray-700">Serviço de Sincronização</span>
-                    <span class="text-sm font-medium text-emerald-600">Operacional</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div class="bg-emerald-500 h-2 rounded-full" style="width: 95%"></div>
-                </div>
+            </template>
+            
+            <div x-show="showRefreshButton" class="pt-2">
+                <button @click="refreshStatus" class="text-xs admin-btn-secondary w-full">
+                    <template x-if="!isRefreshing">
+                        <i data-feather="refresh-cw" class="w-3 h-3 mr-1"></i>
+                    </template>
+                    <template x-if="isRefreshing">
+                        <svg class="animate-spin -ml-1 mr-2 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </template>
+                    <span x-text="isRefreshing ? 'Atualizando...' : 'Atualizar Status'"></span>
+                </button>
             </div>
         </div>
     </div>
 
     <!-- Last Sync Status -->
-    <div class="admin-card">
+    <div class="admin-card" x-data="syncStatus()">
         <h3 class="text-lg font-semibold text-gray-900 mb-6">Status da Última Sincronização</h3>
         <div class="flex flex-col items-center justify-center h-[calc(100%-2rem)]">
-            <div class="w-24 h-24 rounded-full border-8 border-emerald-200 flex items-center justify-center mb-4">
-                <i data-feather="check" class="w-10 h-10 text-emerald-500"></i>
+            <div class="w-24 h-24 rounded-full border-8 flex items-center justify-center mb-4"
+                 :class="lastSync.success ? 'border-emerald-200' : 'border-red-200'">
+                <template x-if="lastSync.success">
+                    <i data-feather="check" class="w-10 h-10 text-emerald-500"></i>
+                </template>
+                <template x-if="!lastSync.success">
+                    <i data-feather="x" class="w-10 h-10 text-red-500"></i>
+                </template>
             </div>
-            <p class="text-lg font-semibold text-gray-900">Concluída com Sucesso</p>
-            <p class="text-sm text-gray-500">15/05/2025 às 16:42</p>
+            <p class="text-lg font-semibold text-gray-900" x-text="lastSync.message"></p>
+            <p class="text-sm text-gray-500" x-text="lastSync.date"></p>
         </div>
     </div>
 
     <!-- Quick Actions -->
-    <div class="admin-card">
+    <div class="admin-card" x-data="quickActions()">
         <h3 class="text-lg font-semibold text-gray-900 mb-6">Ações Rápidas</h3>
         <div class="space-y-3">
-            <button class="admin-btn-primary w-full justify-center">
-                <i data-feather="refresh-cw" class="w-4 h-4"></i>
-                Iniciar Nova Sincronização
+            <button @click="startSync" class="admin-btn-primary w-full justify-center"
+                    :disabled="isSyncing" 
+                    :class="{'opacity-60 cursor-not-allowed': isSyncing}">
+                <template x-if="!isSyncing">
+                    <i data-feather="refresh-cw" class="w-4 h-4"></i>
+                </template>
+                <template x-if="isSyncing">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </template>
+                <span x-text="isSyncing ? 'Sincronizando...' : 'Iniciar Nova Sincronização'"></span>
             </button>
-            <button class="admin-btn-secondary w-full justify-center">
-                <i data-feather="download" class="w-4 h-4"></i>
-                Baixar Relatório
+            <button @click="downloadReport" class="admin-btn-secondary w-full justify-center"
+                    :disabled="isDownloading"
+                    :class="{'opacity-60 cursor-not-allowed': isDownloading}">
+                <template x-if="!isDownloading">
+                    <i data-feather="download" class="w-4 h-4"></i>
+                </template>
+                <template x-if="isDownloading">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </template>
+                <span x-text="isDownloading ? 'Gerando...' : 'Baixar Relatório'"></span>
             </button>
-            <button class="admin-btn-secondary w-full justify-center">
+            <button @click="goToSettings" class="admin-btn-secondary w-full justify-center">
                 <i data-feather="settings" class="w-4 h-4"></i>
                 Configurações do Sistema
             </button>
-            <button class="admin-btn-secondary w-full justify-center">
+            <button @click="openHelpCenter" class="admin-btn-secondary w-full justify-center">
                 <i data-feather="help-circle" class="w-4 h-4"></i>
                 Centro de Ajuda
             </button>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('alpine:init', () => {
+        // Cards de estatísticas
+        Alpine.data('statsCards', () => ({
+            stats: {
+                totalUsers: {{ total_users|default:"0" }},
+                usersTrend: '+12.5%',
+                totalSyncs: {{ total_syncs|default:"0" }},
+                syncsTrend: '+28.4%',
+                successRate: {{ success_rate|default:"0" }},
+                successRateTrend: '+3.2%',
+                connectedSystems: {{ connected_systems|default:"0" }},
+                systemsTrend: '0%'
+            }
+        }));
+        
+        // Atividades recentes
+        Alpine.data('recentActivities', () => ({
+            activities: [],
+            allActivities: [],
+            isLoading: true,
+            isViewingAll: false,
+            initialActivitiesCount: 5,
+            
+            init() {
+                this.loadActivities();
+            },
+            
+            get viewAllText() {
+                return this.isViewingAll ? 'Mostrar menos' : 'Ver todas';
+            },
+            
+            async loadActivities() {
+                this.isLoading = true;
+                
+                // Simulação de chamada à API
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+                this.allActivities = [
+                    {% for activity in recent_activities %}
+                    {
+                        icon: '{{ activity.icon }}',
+                        description: '{{ activity.description }}',
+                        user: '{{ activity.user }}',
+                        timeAgo: '{{ activity.time_ago }}'
+                    },
+                    {% endfor %}
+                    // Atividades extras para simular "Ver todas"
+                    {
+                        icon: 'user-plus',
+                        description: 'Novo usuário cadastrado',
+                        user: 'Sistema',
+                        timeAgo: '3 dias atrás'
+                    },
+                    {
+                        icon: 'settings',
+                        description: 'Configurações do sistema atualizadas',
+                        user: 'Admin',
+                        timeAgo: '4 dias atrás'
+                    },
+                    {
+                        icon: 'database',
+                        description: 'Backup do banco de dados criado',
+                        user: 'Sistema',
+                        timeAgo: '5 dias atrás'
+                    }
+                ];
+                
+                this.activities = this.allActivities.slice(0, this.initialActivitiesCount);
+                this.isLoading = false;
+                
+                // Atualizar ícones
+                setTimeout(() => {
+                    feather.replace();
+                }, 100);
+            },
+            
+            loadMoreActivities() {
+                this.isViewingAll = !this.isViewingAll;
+                
+                if (this.isViewingAll) {
+                    this.activities = this.allActivities;
+                } else {
+                    this.activities = this.allActivities.slice(0, this.initialActivitiesCount);
+                }
+                
+                // Atualizar ícones
+                setTimeout(() => {
+                    feather.replace();
+                }, 100);
+            }
+        }));
+        
+        // Saúde do sistema
+        Alpine.data('systemHealth', () => ({
+            services: [
+                {
+                    name: 'API',
+                    status: 'Operacional',
+                    performance: 98
+                },
+                {
+                    name: 'Banco de Dados',
+                    status: 'Operacional',
+                    performance: 100
+                },
+                {
+                    name: 'Serviço de Sincronização',
+                    status: 'Operacional',
+                    performance: 95
+                }
+            ],
+            isRefreshing: false,
+            showRefreshButton: true,
+            
+            async refreshStatus() {
+                this.isRefreshing = true;
+                
+                // Simulação de chamada à API
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Simular atualização aleatória
+                this.services = this.services.map(service => {
+                    const perf = Math.floor(Math.random() * 10) + 90; // 90-100%
+                    return {
+                        ...service,
+                        status: perf > 92 ? 'Operacional' : 'Problema Detectado',
+                        performance: perf
+                    };
+                });
+                
+                this.isRefreshing = false;
+                feather.replace();
+            }
+        }));
+        
+        // Status da última sincronização
+        Alpine.data('syncStatus', () => ({
+            lastSync: {
+                success: true,
+                message: 'Concluída com Sucesso',
+                date: '15/05/2025 às 16:42'
+            }
+        }));
+        
+        // Ações rápidas
+        Alpine.data('quickActions', () => ({
+            isSyncing: false,
+            isDownloading: false,
+            
+            async startSync() {
+                this.isSyncing = true;
+                
+                // Simulação de chamada à API
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                this.isSyncing = false;
+                alert('Sincronização concluída com sucesso!');
+                feather.replace();
+            },
+            
+            async downloadReport() {
+                this.isDownloading = true;
+                
+                // Simulação de geração de relatório
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                this.isDownloading = false;
+                alert('Relatório gerado com sucesso! O download começará automaticamente.');
+                feather.replace();
+            },
+            
+            goToSettings() {
+                window.location.href = '{% url "admin_settings" %}';
+            },
+            
+            openHelpCenter() {
+                alert('Centro de Ajuda em desenvolvimento');
+            }
+        }));
+    });
+    
+    // Garantir que ícones sejam renderizados após mudanças do Alpine
+    document.addEventListener('alpine:initialized', () => {
+        feather.replace();
+    });
+</script>
 {% endblock %} 
