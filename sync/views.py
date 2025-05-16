@@ -564,24 +564,129 @@ class EmpresaDetailView(View):
     template_name = "sync/empresa_detalhes.html"
 
     def get(self, request, codi_emp, *args, **kwargs):
-        logger.info(f"EmpresaDetailView acessada para codi_emp: {codi_emp}")
+        logger.info(f"Acessando detalhes da empresa com codi_emp: {codi_emp}")
 
-        detalhes_empresa = empresa_sinc_service.get_detalhes_empresa(codi_emp)
+        # Definição das classes MockPage e MockPaginator no escopo do método
+        # TODO: Considerar mover para um local mais global se usadas em múltiplas views
+        class MockPage:
+            def __init__(
+                self,
+                number,
+                paginator_instance,
+                object_list,
+                has_next,
+                has_previous,
+                start_index,
+                end_index,
+            ):
+                self.number = number
+                self.paginator = paginator_instance
+                self.object_list = object_list
+                self.has_next = has_next
+                self.has_previous = has_previous
+                self.start_index = start_index
+                self.end_index = end_index
 
-        if detalhes_empresa is None:
-            logger.warning(
-                f"Empresa com codi_emp {codi_emp} não encontrada ou erro ao buscar detalhes."
-            )
-            messages.error(
-                request,
-                f"A empresa com código {codi_emp} não foi encontrada ou não pôde ser carregada.",
-            )
+        class MockPaginator:
+            def __init__(self, count, num_pages, page_range):
+                self.count = count
+                self.num_pages = num_pages
+                self.page_range = page_range
+
+        empresa_detalhes = empresa_sinc_service.get_detalhes_empresa(codi_emp)
+
+        if not empresa_detalhes:
+            logger.warning(f"Empresa com codi_emp {codi_emp} não encontrada.")
+            messages.error(request, "Empresa não encontrada.")
             return redirect("sync_empresas_list")
 
         context = {
-            "active_page": "empresas",  # Para manter o menu ativo
-            "empresa": detalhes_empresa,
+            "active_page": "empresas",  # Manter o menu lateral ativo em "empresas"
+            "empresa": empresa_detalhes,
         }
+
+        # --- Início da Lógica para Fornecedores ---
+        fornecedor_page_size = 50  # Conforme definido no plano
+        current_f_codi_for = request.GET.get("f_codi_for", None)
+        current_f_nome_for = request.GET.get("f_nome_for", None)
+        current_f_cgce_for = request.GET.get("f_cgce_for", None)
+        f_page_number = request.GET.get("f_page", 1)
+        try:
+            f_page_number = int(f_page_number)
+            if f_page_number < 1:
+                f_page_number = 1
+        except ValueError:
+            f_page_number = 1
+
+        fornecedor_filters = {}
+        if current_f_codi_for:
+            fornecedor_filters["f_codi_for"] = current_f_codi_for
+        if current_f_nome_for:
+            fornecedor_filters["f_nome_for"] = current_f_nome_for
+        if current_f_cgce_for:  # O serviço ODBC já trata o caso de string vazia
+            fornecedor_filters["f_cgce_for"] = current_f_cgce_for
+
+        logger.debug(
+            f"Buscando fornecedores para empresa {codi_emp} com filtros: {fornecedor_filters}, página: {f_page_number}"
+        )
+
+        fornecedores_result = odbc_manager.list_fornecedores_empresa(
+            codi_emp=codi_emp,
+            filters=fornecedor_filters,
+            page_number=f_page_number,
+            page_size=fornecedor_page_size,
+        )
+
+        if fornecedores_result.get("error"):
+            messages.error(
+                request,
+                f"Erro ao buscar fornecedores: {fornecedores_result['error']}",
+            )
+            # Mesmo com erro, preparamos uma estrutura vazia para o template não quebrar
+            fornecedores_list = []
+            fornecedores_total_records = 0
+            fornecedores_total_pages = 0
+        else:
+            fornecedores_list = fornecedores_result.get("data", [])
+            fornecedores_total_records = fornecedores_result.get("total_records", 0)
+            fornecedores_total_pages = fornecedores_result.get("total_pages", 0)
+
+        # Criar um objeto Paginator e Page simulado para fornecedores
+        # Isso permite reutilizar a lógica de template de paginação se for similar
+        fornecedores_paginator = MockPaginator(
+            count=fornecedores_total_records,
+            num_pages=fornecedores_total_pages,
+            page_range=range(1, fornecedores_total_pages + 1),
+        )
+        fornecedores_page_obj = MockPage(
+            number=f_page_number,
+            paginator_instance=fornecedores_paginator,
+            object_list=fornecedores_list,
+            has_next=(f_page_number < fornecedores_total_pages),
+            has_previous=(f_page_number > 1),
+            start_index=(
+                ((f_page_number - 1) * fornecedor_page_size + 1)
+                if fornecedores_list
+                else 0
+            ),
+            end_index=(
+                ((f_page_number - 1) * fornecedor_page_size + len(fornecedores_list))
+                if fornecedores_list
+                else 0
+            ),
+        )
+
+        context["fornecedores_list"] = (
+            fornecedores_list  # Lista de fornecedores da página atual
+        )
+        context["fornecedores_page_obj"] = (
+            fornecedores_page_obj  # Objeto de página para paginação
+        )
+        context["current_f_codi_for"] = current_f_codi_for
+        context["current_f_nome_for"] = current_f_nome_for
+        context["current_f_cgce_for"] = current_f_cgce_for
+        # --- Fim da Lógica para Fornecedores ---
+
         return render(request, self.template_name, context)
 
 

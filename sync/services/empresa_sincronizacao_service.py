@@ -62,7 +62,7 @@ class EmpresaSincronizacaoService:
         self,
         filters: Optional[Dict[str, Any]] = None,
         page_number: int = 1,
-        page_size: int = 50,
+        page_size: int = 25,
         filtro_sincronizacao: Optional[
             str
         ] = None,  # 'todas', 'habilitada', 'desabilitada'

@@ -497,11 +497,134 @@ class ODBCConnectionManager:
             logger.error(f"Erro ao buscar empresa por codi_emp: {str(e)}")
             return None
 
+    def list_fornecedores_empresa(
+        self,
+        codi_emp: int,
+        filters: Optional[Dict[str, Any]] = None,
+        page_number: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Lista fornecedores de uma empresa, com estrutura de retorno padronizada.
+        Filtros e paginação serão aprimorados.
+
+        Args:
+            codi_emp: Código da empresa.
+            filters: Dicionário com filtros (ex: {'f_codi_for': '123', 'f_nome_for': 'nome'}).
+            page_number: Número da página.
+            page_size: Tamanho da página.
+
+        Returns:
+            Dicionário com 'success', 'data', 'total_records', 'current_page', 'page_size', 'total_pages', 'error'.
+        """
+        logger.info(
+            f"list_fornecedores_empresa chamada para codi_emp: {codi_emp}, "
+            f"filters: {filters}, page: {page_number}, size: {page_size}"
+        )
+
+        # Inicializar estrutura de resposta
+        response = {
+            "success": False,
+            "data": [],
+            "total_records": 0,
+            "current_page": page_number,
+            "page_size": page_size,
+            "total_pages": 0,
+            "error": None,
+        }
+
+        cnxn = None
+        try:
+            conn_str = self.build_connection_string() # Usa a configuração ativa
+            cnxn = pyodbc.connect(conn_str, timeout=self.DEFAULT_TIMEOUT)
+            cursor = cnxn.cursor()
+
+            # Definições centralizadas para a construção da query
+            fields_to_select_str = "codi_for, cgce_for, nome_for, codi_cta"
+            source_table_name = "bethadba.effornece"
+            primary_filter_condition = "codi_emp = ?" # Condição principal para buscar fornecedores de uma empresa
+            default_order_by_field = "codi_for"
+
+            params_where = [codi_emp] # Parâmetro para primary_filter_condition
+            where_clauses_list = [] # Lista para cláusulas de filtros adicionais
+
+            # Aplicar filtros adicionais baseados no argumento 'filters'
+            if filters:
+                if filters.get("f_codi_for"):
+                    where_clauses_list.append(f"{default_order_by_field} = ?") # Assumindo que f_codi_for corresponde ao campo de ordenação/ID
+                    params_where.append(filters.get("f_codi_for"))
+                if filters.get("f_nome_for"):
+                    where_clauses_list.append("UPPER(nome_for) LIKE ?")
+                    params_where.append(f"%{filters.get('f_nome_for').upper()}%")
+                if filters.get("f_cgce_for"):
+                    where_clauses_list.append("cgce_for = ?")
+                    params_where.append(filters.get("f_cgce_for"))
+            
+            where_sql_additional = ""
+            if where_clauses_list:
+                where_sql_additional = " AND " + " AND ".join(where_clauses_list)
+
+            # Construir query de contagem
+            final_query_count = f"SELECT COUNT(*) FROM {source_table_name} WHERE {primary_filter_condition}{where_sql_additional}"
+            logger.debug(f"Query de contagem fornecedores: {final_query_count}, Params: {params_where}")
+            cursor.execute(final_query_count, *params_where)
+            count_result = cursor.fetchone()
+            if count_result:
+                response["total_records"] = count_result[0]
+
+            if response["total_records"] > 0:
+                response["total_pages"] = (
+                    (response["total_records"] + page_size - 1) // page_size
+                ) 
+
+                start_at = ((page_number - 1) * page_size) + 1
+                order_by_sql = f" ORDER BY {default_order_by_field} ASC"
+
+                # Construir query de seleção paginada
+                paginated_query_select = (
+                    f"SELECT TOP {page_size} START AT {start_at} {fields_to_select_str} "
+                    f"FROM {source_table_name} WHERE {primary_filter_condition}{where_sql_additional}{order_by_sql}"
+                )
+                
+                logger.debug(f"Query de seleção fornecedores (paginada): {paginated_query_select}, Params: {params_where}")
+                cursor.execute(paginated_query_select, *params_where)
+                
+                rows = cursor.fetchall()
+                columns = [column[0] for column in cursor.description]
+                response["data"] = [dict(zip(columns, row)) for row in rows]
+                response["success"] = True
+            else:
+                response["success"] = True # Consulta bem-sucedida, mas sem resultados
+
+            cursor.close()
+
+        except pyodbc.Error as ex:
+            sqlstate = ex.args[0]
+            error_message = str(ex)
+            logger.error(
+                f"Erro ODBC ao listar fornecedores para empresa {codi_emp}: {sqlstate} - {error_message}"
+            )
+            response["error"] = f"Erro ODBC: {error_message}"
+            # Detalhes do erro podem ser adicionados aqui se necessário, como em test_connection
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(
+                f"Erro inesperado ao listar fornecedores da empresa {codi_emp}: {error_msg}"
+            )
+            response["error"] = f"Erro inesperado no sistema: {error_msg}"
+        finally:
+            if cnxn:
+                cnxn.close()
+
+        return response
+        
+    
+
     def list_empresas(
         self,
         filters: Optional[Dict[str, Any]] = None,
         page_number: int = 1,
-        page_size: int = 50,
+        page_size: int = 25,
         codi_emp_in_list: Optional[List[int]] = None,  # Novo parâmetro
     ) -> Dict[str, Any]:
         """

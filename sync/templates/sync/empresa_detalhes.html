@@ -71,6 +71,150 @@
     <!-- Container para mensagens de notificação -->
     <div id="message-container-detalhes" class="fixed top-5 right-5 z-50 space-y-2"></div>
 
+    {# --- Início da Seção de Fornecedores --- #}
+    <div class="mt-8 pt-6 border-t border-gray-200">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Fornecedores da Empresa</h2>
+
+        {# Formulário de Filtros para Fornecedores #}
+        <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
+            {% csrf_token %} {# Embora GET, útil para consistência ou futuras mudanças #}
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label for="f_codi_for" class="admin-label">Cód. Fornecedor</label>
+                    <input type="text" name="f_codi_for" id="f_codi_for" value="{{ current_f_codi_for|default:'' }}" class="admin-input">
+                </div>
+                <div>
+                    <label for="f_nome_for" class="admin-label">Nome do Fornecedor</label>
+                    <input type="text" name="f_nome_for" id="f_nome_for" value="{{ current_f_nome_for|default:'' }}" class="admin-input">
+                </div>
+                <div>
+                    <label for="f_cgce_for" class="admin-label">CNPJ/CGC Fornecedor</label>
+                    <input type="text" name="f_cgce_for" id="f_cgce_for" value="{{ current_f_cgce_for|default:'' }}" class="admin-input">
+                </div>
+                <div class="flex space-x-2">
+                    <button type="submit" class="admin-btn-primary w-full md:w-auto">
+                        <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
+                    </button>
+                    <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}" class="admin-btn-secondary w-full md:w-auto">
+                        <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
+                    </a>
+                </div>
+            </div>
+        </form>
+
+        {# Tabela de Fornecedores #}
+        {% if fornecedores_list %}
+            <div class="overflow-x-auto admin-table-container rounded-lg shadow border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Forn.</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">CNPJ/CGC</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Conta</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white">
+                        {% for fornecedor in fornecedores_list %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_for }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.nome_for }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.cgce_for|default:'-' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_cta|default:'-' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# Paginação para Fornecedores #}
+            {% if fornecedores_page_obj.paginator.num_pages > 1 %}
+                <div class="mt-6 flex items-center justify-between">
+                    <div class="text-sm text-gray-700">
+                        Mostrando <span class="font-medium">{{ fornecedores_page_obj.start_index }}</span>
+                        a <span class="font-medium">{{ fornecedores_page_obj.end_index }}</span>
+                        de <span class="font-medium">{{ fornecedores_page_obj.paginator.count }}</span> resultados.
+                    </div>
+                    <div class="flex-1 flex justify-end">
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Paginação">
+                            {% if fornecedores_page_obj.has_previous %}
+                                <a href="?f_page=1&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
+                                   class="admin-pagination-btn rounded-l-md">
+                                    <span class="sr-only">Primeira</span>
+                                    <i data-feather="chevrons-left" class="h-5 w-5"></i>
+                                </a>
+                                <a href="?f_page={{ fornecedores_page_obj.previous_page_number }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
+                                   class="admin-pagination-btn">
+                                    <span class="sr-only">Anterior</span>
+                                    <i data-feather="chevron-left" class="h-5 w-5"></i>
+                                </a>
+                            {% else %}
+                                <span class="admin-pagination-btn-disabled rounded-l-md">
+                                    <span class="sr-only">Primeira</span>
+                                    <i data-feather="chevrons-left" class="h-5 w-5"></i>
+                                </span>
+                                <span class="admin-pagination-btn-disabled">
+                                    <span class="sr-only">Anterior</span>
+                                    <i data-feather="chevron-left" class="h-5 w-5"></i>
+                                </span>
+                            {% endif %}
+
+                            {% for num in fornecedores_page_obj.paginator.page_range %}
+                                {% if fornecedores_page_obj.number == num %}
+                                    <span aria-current="page" class="admin-pagination-btn-active z-10">
+                                        {{ num }}
+                                    </span>
+                                {% elif num > fornecedores_page_obj.number|add:'-3' and num < fornecedores_page_obj.number|add:'3' %}
+                                    <a href="?f_page={{ num }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
+                                       class="admin-pagination-btn">
+                                        {{ num }}
+                                    </a>
+                                {% elif num == fornecedores_page_obj.paginator.page_range.0 or num == fornecedores_page_obj.paginator.page_range|last %}
+                                    {# Adicionar '...' se houver grande salto de páginas, e sempre mostrar primeira/última se não estiverem no range próximo #}
+                                    {% if num == fornecedores_page_obj.paginator.page_range.0 and fornecedores_page_obj.number|add:'-3' > fornecedores_page_obj.paginator.page_range.0 %}
+                                        <span class="admin-pagination-btn-disabled">...</span>
+                                    {% elif num == fornecedores_page_obj.paginator.page_range|last and fornecedores_page_obj.number|add:'3' < fornecedores_page_obj.paginator.page_range|last %}
+                                        <span class="admin-pagination-btn-disabled">...</span>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if fornecedores_page_obj.has_next %}
+                                <a href="?f_page={{ fornecedores_page_obj.next_page_number }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
+                                   class="admin-pagination-btn">
+                                    <span class="sr-only">Próxima</span>
+                                    <i data-feather="chevron-right" class="h-5 w-5"></i>
+                                </a>
+                                <a href="?f_page={{ fornecedores_page_obj.paginator.num_pages }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
+                                   class="admin-pagination-btn rounded-r-md">
+                                    <span class="sr-only">Última</span>
+                                    <i data-feather="chevrons-right" class="h-5 w-5"></i>
+                                </a>
+                            {% else %}
+                                <span class="admin-pagination-btn-disabled">
+                                    <span class="sr-only">Próxima</span>
+                                    <i data-feather="chevron-right" class="h-5 w-5"></i>
+                                </span>
+                                <span class="admin-pagination-btn-disabled rounded-r-md">
+                                    <span class="sr-only">Última</span>
+                                    <i data-feather="chevrons-right" class="h-5 w-5"></i>
+                                </span>
+                            {% endif %}
+                        </nav>
+                    </div>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="text-center py-10">
+                <i data-feather="info" class="w-12 h-12 mx-auto text-gray-400"></i>
+                <p class="mt-2 text-sm text-gray-500">
+                    Nenhum fornecedor encontrado para esta empresa{% if current_f_codi_for or current_f_nome_for or current_f_cgce_for %} com os filtros aplicados{% endif %}.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+    {# --- Fim da Seção de Fornecedores --- #}
+
 </div>
 {% endblock %}
 
