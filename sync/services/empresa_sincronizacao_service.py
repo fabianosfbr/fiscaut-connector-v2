@@ -142,6 +142,58 @@ class EmpresaSincronizacaoService:
         empresas_odbc_result["data"] = empresas_data
         return empresas_odbc_result
 
+    def get_detalhes_empresa(self, codi_emp: int) -> Optional[Dict[str, Any]]:
+        """
+        Busca os detalhes de uma empresa específica, combinando dados do ODBC e
+        o status de sincronização local.
+
+        Args:
+            codi_emp: O código da empresa.
+
+        Returns:
+            Um dicionário com os detalhes da empresa (codi_emp, razao_emp, cgce_emp,
+            habilitada_sincronizacao) se encontrada, None caso contrário.
+        """
+        logger.debug(f"Buscando detalhes para a empresa com codi_emp: {codi_emp}")
+
+        # 1. Buscar dados básicos da empresa no ODBC
+        empresa_odbc_data = self.odbc_manager.get_empresa_by_codi_emp(codi_emp)
+
+        if not empresa_odbc_data:
+            logger.info(
+                f"Empresa com codi_emp {codi_emp} não encontrada no ODBC. Retornando None."
+            )
+            return None
+
+        # 2. Buscar o status de sincronização local
+        try:
+            empresa_sinc_status = EmpresaSincronizacao.objects.get(codi_emp=codi_emp)
+            habilitada_sincronizacao = empresa_sinc_status.habilitada_sincronizacao
+            logger.debug(
+                f"Status de sincronização encontrado para {codi_emp}: {habilitada_sincronizacao}"
+            )
+        except EmpresaSincronizacao.DoesNotExist:
+            habilitada_sincronizacao = False  # Padrão se não houver registro local
+            logger.debug(
+                f"Nenhum registro de sincronização local para {codi_emp}. Definindo como False."
+            )
+        except Exception as e:
+            logger.error(f"Erro ao buscar status de sincronização para {codi_emp}: {e}")
+            # Em caso de erro ao buscar o status, podemos definir um padrão ou propagar o erro.
+            # Por segurança e para não impedir a visualização dos dados do ODBC, definimos como False.
+            habilitada_sincronizacao = False
+
+        # 3. Combinar os dados
+        detalhes_empresa = {
+            "codi_emp": empresa_odbc_data.get("codi_emp"),
+            "razao_emp": empresa_odbc_data.get("razao_emp"),
+            "cgce_emp": empresa_odbc_data.get("cgce_emp"),
+            "habilitada_sincronizacao": habilitada_sincronizacao,
+        }
+
+        logger.info(f"Detalhes da empresa {codi_emp} recuperados com sucesso.")
+        return detalhes_empresa
+
 
 # Instância singleton para uso em toda a aplicação (se necessário, ou injetar via Django)
 empresa_sinc_service = EmpresaSincronizacaoService()

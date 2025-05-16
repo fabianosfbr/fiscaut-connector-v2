@@ -1,0 +1,206 @@
+{% extends "sync/base.html" %}
+{% load static %}
+
+{% block title %}Detalhes da Empresa - {{ empresa.razao_emp|default:'Empresa' }}{% endblock %}
+
+{% block page_title %}Detalhes da Empresa{% endblock %}
+{% block page_subtitle %}{{ empresa.cgce_emp|default:'CNPJ não disponível' }}{% endblock %}
+
+{% block content %}
+<div class="admin-card space-y-6" x-data="empresaDetalhesPage({{ empresa.codi_emp|default:'null' }}, {{ empresa.habilitada_sincronizacao|yesno:'true,false,false' }})">
+
+    <!-- Botão Voltar e Título da Seção -->
+    <div class="flex justify-between items-center mb-6">
+        <div class="flex-1">
+            <!-- O título principal da página já está no block page_title -->
+            <!-- O subtítulo com CNPJ está no block page_subtitle -->
+        </div>
+        <a href="{% url 'sync_empresas_list' %}" class="admin-btn-secondary whitespace-nowrap">
+            <i data-feather="arrow-left" class="w-4 h-4 mr-2"></i>Voltar para Lista
+        </a>
+    </div>
+
+    <!-- Informações da Empresa e Botão de Sincronização -->
+    <div class="bg-white p-6 rounded-lg shadow border border-gray-200 space-y-4">
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-700">{{ empresa.razao_emp|default:'Nome não disponível' }}</h2>
+                <p class="text-sm text-gray-500">CNPJ: {{ empresa.cgce_emp|default:'Não informado' }}</p>
+            </div>
+            <button @click="toggleSincronizacaoDetalhes()"
+                    :class="{
+                        'admin-btn-success': habilitada,
+                        'admin-btn-danger': !habilitada
+                    }"
+                    class="whitespace-nowrap flex items-center">
+                <i :data-feather="habilitada ? 'check-circle' : 'slash'" class="w-4 h-4 mr-2"></i>
+                <span x-text="habilitada ? 'Sincronização Ativa' : 'Sincronização Inativa'"></span>
+                <span x-show="isLoadingToggle" class="ml-2"><i data-feather="loader" class="animate-spin w-4 h-4"></i></span>
+            </button>
+        </div>
+
+        <!-- Cards de Detalhes -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+            <div class="admin-info-card">
+                <h3 class="text-sm font-medium text-gray-500">Código</h3>
+                <p class="text-lg font-semibold text-gray-800">{{ empresa.codi_emp|default:'N/A' }}</p>
+            </div>
+            <div class="admin-info-card">
+                <h3 class="text-sm font-medium text-gray-500">Razão Social</h3>
+                <p class="text-lg font-semibold text-gray-800">{{ empresa.razao_emp|default:'N/A' }}</p>
+            </div>
+            <div class="admin-info-card">
+                <h3 class="text-sm font-medium text-gray-500">CNPJ</h3>
+                <p class="text-lg font-semibold text-gray-800">{{ empresa.cgce_emp|default:'N/A' }}</p>
+            </div>
+            <div class="admin-info-card">
+                <h3 class="text-sm font-medium text-gray-500">Status Sincronização</h3>
+                <span :class="{'admin-badge-success': habilitada, 'admin-badge-danger': !habilitada}" class="px-3 py-1 rounded-full text-sm font-medium">
+                    <span x-text="habilitada ? 'Ativa' : 'Inativa'"></span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container para mensagens de notificação -->
+    <div id="message-container-detalhes" class="fixed top-5 right-5 z-50 space-y-2"></div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function empresaDetalhesPage(codiEmp, habilitadaInicial) {
+        return {
+            codiEmp: codiEmp,
+            habilitada: habilitadaInicial,
+            isLoadingToggle: false,
+
+            getCsrfToken() {
+                let tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (tokenInput) return tokenInput.value; // Pega do form invisível, se houver
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    let cookie = cookies[i].trim();
+                    if (cookie.startsWith('csrftoken=')) {
+                        return cookie.substring('csrftoken='.length, cookie.length);
+                    }
+                }
+                // Adicionar um input CSRF se não existir para garantir que o token está disponível
+                // (geralmente {% csrf_token %} no form principal da página já faria isso)
+                // Se esta página não tiver um form com {% csrf_token %}, precisaremos buscar de outra forma ou garantir que `base.html` o inclua.
+                // Como `sync_empresas_list` tem um form com csrf_token, e esta página extende `base.html`,
+                // pode ser que o token já esteja em um cookie ou no DOM. A busca por cookie é uma boa alternativa.
+                console.warn('CSRF token não encontrado diretamente no form. Tentando via cookie.');
+                return null; 
+            },
+
+            async toggleSincronizacaoDetalhes() {
+                this.isLoadingToggle = true;
+                const novoStatus = !this.habilitada;
+                const csrfToken = this.getCsrfToken();
+
+                if (!csrfToken) {
+                    console.error('CSRF token não encontrado para toggleSincronizacaoDetalhes!');
+                    this.showMessageDetalhes('Erro de segurança (Token CSRF ausente). Tente recarregar a página.', 'error');
+                    this.isLoadingToggle = false;
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`{% url 'sync_api_toggle_empresa_sincronizacao' %}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            codi_emp: this.codiEmp,
+                            habilitar: novoStatus
+                        })
+                    });
+
+                    const responseData = await response.json().catch(() => {
+                        if (!response.ok) throw new Error(`Erro HTTP: ${response.status} - Resposta não JSON ou vazia.`);
+                        return { success: response.ok }; 
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(responseData.message || `Erro HTTP: ${response.status}`);
+                    }
+                    
+                    if (typeof responseData.success === 'undefined') {
+                        responseData.success = response.ok;
+                    }
+
+                    if (responseData.success) {
+                        this.habilitada = novoStatus;
+                        this.showMessageDetalhes(responseData.message || 'Status de sincronização atualizado com sucesso!', 'success');
+                    } else {
+                        this.showMessageDetalhes(responseData.message || 'Erro ao atualizar o status de sincronização.', 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Erro ao tentar sincronizar empresa (detalhes):', error);
+                    this.showMessageDetalhes(error.message || 'Erro de comunicação ao tentar atualizar o status.', 'error');
+                } finally {
+                    this.isLoadingToggle = false;
+                    this.$nextTick(() => {
+                        feather.replace(); // Para atualizar os ícones (loader, check-circle, slash)
+                    });
+                }
+            },
+
+            showMessageDetalhes(message, type = 'info') {
+                const container = document.getElementById('message-container-detalhes');
+                if (!container) {
+                    console.warn("Elemento 'message-container-detalhes' não encontrado para exibir mensagem.");
+                    return;
+                }
+                const messageId = `message-detalhes-${Date.now()}`;
+                
+                let bgColor, textColor, borderColor, icon;
+                if (type === 'success') {
+                    bgColor = 'bg-green-50'; textColor = 'text-green-700'; borderColor = 'border-green-200'; icon = 'check-circle';
+                } else if (type === 'error') {
+                    bgColor = 'bg-red-50'; textColor = 'text-red-700'; borderColor = 'border-red-200'; icon = 'alert-circle';
+                } else if (type === 'warning') {
+                    bgColor = 'bg-yellow-50'; textColor = 'text-yellow-700'; borderColor = 'border-yellow-200'; icon = 'alert-triangle';
+                } else { // info
+                    bgColor = 'bg-blue-50'; textColor = 'text-blue-700'; borderColor = 'border-blue-200'; icon = 'info';
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.id = messageId;
+                messageDiv.className = `p-3 rounded-md text-sm flex items-center shadow-lg ${bgColor} ${textColor} ${borderColor} border`;
+                messageDiv.innerHTML = `
+                    <i data-feather="${icon}" class="w-5 h-5 mr-2"></i>
+                    <span>${message}</span>
+                    <button onclick="
+                        const elToRemove = document.getElementById('${messageId}');
+                        if (elToRemove) elToRemove.remove();
+                    " class="ml-auto -mx-1.5 -my-1.5 bg-transparent rounded-lg focus:ring-2 focus:ring-gray-400 p-1.5 hover:bg-gray-200 inline-flex h-8 w-8">
+                        <span class="sr-only">Fechar</span>
+                        <i data-feather="x" class="w-5 h-5"></i>
+                    </button>
+                `;
+                container.appendChild(messageDiv);
+                this.$nextTick(() => {
+                    feather.replace(); 
+                });
+
+                setTimeout(() => {
+                    const el = document.getElementById(messageId);
+                    if (el) el.remove();
+                }, 7000); // Aumentado para 7 segundos
+            }
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', (event) => {
+        // feather.replace(); // `base.html` já chama feather.replace() no DOMContentLoaded.
+        // Se esta página adicionar ícones dinamicamente fora do escopo de Alpine que já chama feather.replace(),
+        // pode ser necessário aqui, mas o Alpine já chama no `finally` do toggle e `showMessageDetalhes`.
+    });
+</script>
+{% endblock %} 

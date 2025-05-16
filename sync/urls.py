@@ -23,4 +23,9 @@ urlpatterns = [
         views.api_toggle_empresa_sincronizacao,
         name="sync_api_toggle_empresa_sincronizacao",
     ),
+    path(
+        "empresas/<int:codi_emp>/detalhes/",
+        views.EmpresaDetailView.as_view(),
+        name="sync_empresa_detalhes",
+    ),
 ]

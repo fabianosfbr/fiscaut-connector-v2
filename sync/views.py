@@ -10,6 +10,8 @@ from .services.empresa_sincronizacao_service import empresa_sinc_service
 import logging
 from django.core.paginator import Paginator
 from django.contrib import messages
+from django.views import View
+from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
@@ -378,89 +380,211 @@ class EmpresasListView(TemplateView):
         context = super().get_context_data(**kwargs)
         context["active_page"] = "empresas"
 
-        page_number = self.request.GET.get("page", 1)
-        search_filters = {}
-        nome_empresa_filter = self.request.GET.get("razao_emp", None)
-        if nome_empresa_filter:
-            search_filters["razao_emp"] = nome_empresa_filter
+        # Definição das classes MockPage e MockPaginator no escopo do método
+        class MockPage:
+            def __init__(
+                self,
+                number,
+                paginator_instance,
+                object_list,
+                has_next,
+                has_previous,
+                start_index,
+                end_index,
+            ):
+                self.number = number
+                self.paginator = paginator_instance
+                self.object_list = object_list
+                self.has_next = has_next
+                self.has_previous = has_previous
+                self.start_index = start_index
+                self.end_index = end_index
 
-        codi_emp_filter = self.request.GET.get("codi_emp", None)
-        if codi_emp_filter:
-            try:
-                search_filters["codi_emp"] = int(codi_emp_filter)
-            except ValueError:
-                messages.error(self.request, "Código da empresa inválido.")
+        class MockPaginator:
+            def __init__(self, count, num_pages, page_range):
+                self.count = count
+                self.num_pages = num_pages
+                self.page_range = page_range
 
-        cgce_emp_filter = self.request.GET.get("cgce_emp", None)
-        if cgce_emp_filter:
-            search_filters["cgce_emp"] = cgce_emp_filter
-
-        # Novo filtro para status de sincronização
-        filtro_sincronizacao = self.request.GET.get(
+        # Filtros da requisição GET
+        current_codi_emp = self.request.GET.get("codi_emp", None)
+        current_cgce_emp = self.request.GET.get("cgce_emp", None)
+        # Corrigido para razao_emp, conforme formulário e modelo de filtro
+        current_nome_empresa = self.request.GET.get("razao_emp", None)
+        current_filtro_sincronizacao = self.request.GET.get(
             "filtro_sincronizacao", "todas"
-        )  # 'todas', 'habilitada', 'desabilitada'
-        context["current_filtro_sincronizacao"] = filtro_sincronizacao
+        )
 
+        filters_dict = {}
+        if current_codi_emp:
+            filters_dict["codi_emp"] = current_codi_emp
+        if current_cgce_emp:
+            filters_dict["cgce_emp"] = current_cgce_emp
+        if current_nome_empresa:
+            filters_dict["razao_emp"] = current_nome_empresa
+
+        page_number = self.request.GET.get("page", 1)
         try:
-            # Usar o novo serviço para listar empresas com status de sincronização
-            empresas_result = (
-                empresa_sinc_service.list_empresas_com_status_sincronizacao(
-                    filters=search_filters,
-                    page_number=int(page_number),
-                    page_size=self.page_size,
-                    filtro_sincronizacao=filtro_sincronizacao,
-                )
-            )
+            page_number = int(page_number)
+        except ValueError:
+            page_number = 1
 
-            if empresas_result.get("success"):
-                empresas_list = empresas_result.get("data", [])
-                total_records = empresas_result.get("total_records", 0)
+        logger.debug(
+            f"EmpresasListView: page={page_number}, filters={filters_dict}, sync_filter={current_filtro_sincronizacao}"
+        )
 
-                # A paginação aqui pode ser um pouco enganosa se o filtro de sincronização
-                # for 'habilitada' ou 'desabilitada', porque o total_records vem do ODBC
-                # antes do filtro em memória. A UI deve estar ciente disso ou
-                # a lógica de paginação precisaria de um retrabalho mais complexo.
+        # Usar o novo EmpresaSincronizacaoService
+        # A paginação agora é tratada dentro do serviço que chama o ODBCManager
+        resultado_servico = empresa_sinc_service.list_empresas_com_status_sincronizacao(
+            filters=filters_dict,
+            page_number=page_number,
+            page_size=self.page_size,
+            filtro_sincronizacao=current_filtro_sincronizacao,
+        )
+
+        empresas_list = []  # Inicializa com lista vazia
+        page_obj = None  # Inicializa como None
+        error_message = None
+
+        if resultado_servico.get("success", False):
+            empresas_raw = resultado_servico.get("data", [])
+            total_records = resultado_servico.get("total_records", 0)
+
+            # O serviço agora retorna dados já paginados e com o total correto
+            # A Paginator do Django pode ser usada aqui apenas para a interface, se desejado,
+            # mas a paginação real da query já ocorreu.
+            # Para manter a compatibilidade com o template que espera um page_obj do Django Paginator:
+            if total_records > 0 and empresas_raw:
                 paginator = Paginator(
-                    range(total_records), self.page_size
-                )  # Usar um range para o paginator
-                page_obj = paginator.get_page(page_number)
+                    empresas_raw, self.page_size
+                )  # Paginando a lista já retornada
+                # Nota: idealmente, o paginator deveria ser usado com uma queryset ou lista completa
+                # e ele faria o slice. Aqui, como o serviço já paginou, estamos "re-paginando" um subconjunto.
+                # Isso é ok se o `empresas_raw` já é a página correta de dados.
+                # Se o serviço retornasse todos os dados e o total, Paginator faria mais sentido.
+                # Mas como o serviço já faz a paginação na query ODBC, vamos usar os dados diretos.
 
-                # Atribuir os dados da página atual (já filtrados em memória pelo serviço se necessário)
-                context["empresas_list"] = empresas_list
-                context["page_obj"] = page_obj
-                context["total_records"] = total_records
-                # Adicionar os filtros atuais ao contexto para persistir nos links de paginação/formulário de filtro
-                context["current_filters"] = search_filters
-                context["current_nome_empresa"] = nome_empresa_filter
-                context["current_codi_emp"] = codi_emp_filter
-                context["current_cgce_emp"] = cgce_emp_filter
+                # Ajuste: usar os dados e totais do serviço diretamente para construir algo semelhante ao page_obj
+                # ou passar os dados diretos.
+                # Por simplicidade, vamos simular um page_obj limitado ou passar os dados.
 
-            else:
-                messages.error(
-                    self.request,
-                    f"Erro ao carregar empresas: {empresas_result.get('error', 'Erro desconhecido')}",
+                # Simplificação: O template espera page_obj com certos atributos.
+                # O serviço retorna a lista de empresas para a página atual e os totais.
+                empresas_list = empresas_raw
+
+                # Criar um objeto Page simulado ou adaptar o template para usar os dados diretos do serviço
+                # Para manter o template como está, podemos construir um Paginator com a lista da página atual
+                # e depois pegar a primeira página dele (que será a única página com esses dados)
+                # Isso não é eficiente mas mantém a estrutura do template.
+                # Uma melhor abordagem seria adaptar o template para `total_records`, `current_page`, `total_pages` do serviço.
+
+                # Tentativa de simular page_obj para compatibilidade:
+                # Criar um Paginator com uma lista de objetos que serão "falsos" para além da página atual,
+                # mas que permite que o Paginator calcule `num_pages` e `count` corretamente.
+                # Isso é complexo. Vamos simplificar e assumir que o template pode ser adaptado ou
+                # que o serviço retorna o suficiente para popular os atributos do page_obj que o template usa.
+
+                total_pages_from_service = resultado_servico.get("total_pages", 1)
+                current_page_from_service = resultado_servico.get("current_page", 1)
+
+                mock_paginator_instance = MockPaginator(
+                    count=total_records,
+                    num_pages=total_pages_from_service,
+                    page_range=range(1, total_pages_from_service + 1),  # Simples range
                 )
-                context["empresas_list"] = []
-                context["page_obj"] = None
-                context["total_records"] = 0
-                logger.error(
-                    f"Falha ao carregar dados de empresas para a view: {empresas_result.get('error')}"
+
+                page_obj = MockPage(
+                    number=current_page_from_service,
+                    paginator_instance=mock_paginator_instance,
+                    object_list=empresas_list,
+                    has_next=(current_page_from_service < total_pages_from_service),
+                    has_previous=(current_page_from_service > 1),
+                    start_index=(
+                        ((current_page_from_service - 1) * self.page_size) + 1
+                        if empresas_list
+                        else 0
+                    ),
+                    end_index=(
+                        ((current_page_from_service - 1) * self.page_size)
+                        + len(empresas_list)
+                        if empresas_list
+                        else 0
+                    ),
                 )
 
-        except Exception as e:
-            messages.error(
-                self.request, f"Erro inesperado ao carregar empresas: {str(e)}"
+            else:  # total_records == 0 ou empresas_raw vazia
+                empresas_list = []
+                # page_obj permanece None, ou podemos criar um MockPage vazio
+                mock_paginator_instance = MockPaginator(
+                    count=0, num_pages=1, page_range=range(1, 2)
+                )
+                page_obj = MockPage(
+                    number=1,
+                    paginator_instance=mock_paginator_instance,
+                    object_list=[],
+                    has_next=False,
+                    has_previous=False,
+                    start_index=0,
+                    end_index=0,
+                )
+
+        else:
+            error_message = resultado_servico.get("error", "Erro ao carregar empresas.")
+            logger.error(f"Erro do serviço ao listar empresas: {error_message}")
+            messages.error(self.request, error_message)
+            # Cria um page_obj vazio para evitar erros no template
+            mock_paginator_instance = MockPaginator(
+                count=0, num_pages=1, page_range=range(1, 2)
             )
-            context["empresas_list"] = []
-            context["page_obj"] = None
-            context["total_records"] = 0
-            logger.exception("Erro inesperado na view EmpresasListView")
+            page_obj = MockPage(
+                number=1,
+                paginator_instance=mock_paginator_instance,
+                object_list=[],
+                has_next=False,
+                has_previous=False,
+                start_index=0,
+                end_index=0,
+            )
 
-        context["page_title"] = "Empresas"
+        context["empresas_list"] = empresas_list
+        context["page_obj"] = page_obj
+        context["total_records"] = total_records if "total_records" in locals() else 0
+        context["error_message"] = error_message
+
+        # Manter os filtros no contexto para preencher o formulário
+        context["current_codi_emp"] = current_codi_emp
+        context["current_cgce_emp"] = current_cgce_emp
+        context["current_nome_empresa"] = current_nome_empresa
+        context["current_filtro_sincronizacao"] = current_filtro_sincronizacao
+
         return context
 
 
-# Adicionar nova view da API para toggle
+class EmpresaDetailView(View):
+    template_name = "sync/empresa_detalhes.html"
+
+    def get(self, request, codi_emp, *args, **kwargs):
+        logger.info(f"EmpresaDetailView acessada para codi_emp: {codi_emp}")
+
+        detalhes_empresa = empresa_sinc_service.get_detalhes_empresa(codi_emp)
+
+        if detalhes_empresa is None:
+            logger.warning(
+                f"Empresa com codi_emp {codi_emp} não encontrada ou erro ao buscar detalhes."
+            )
+            messages.error(
+                request,
+                f"A empresa com código {codi_emp} não foi encontrada ou não pôde ser carregada.",
+            )
+            return redirect("sync_empresas_list")
+
+        context = {
+            "active_page": "empresas",  # Para manter o menu ativo
+            "empresa": detalhes_empresa,
+        }
+        return render(request, self.template_name, context)
+
+
 @require_http_methods(["POST"])
 def api_toggle_empresa_sincronizacao(request):
     """
