@@ -460,7 +460,13 @@ class ODBCConnectionManager:
             logger.error(f"Erro ao executar comando SQL: {error_msg}")
             return False, 0, error_msg
 
-    def list_empresas(self, filters=None, page_number=1, page_size=50):
+    def list_empresas(
+        self, 
+        filters: Optional[Dict[str, Any]] = None, 
+        page_number: int = 1, 
+        page_size: int = 50,
+        codi_emp_in_list: Optional[List[int]] = None  # Novo parâmetro
+    ) -> Dict[str, Any]:
         """
         Lista empresas da tabela bethadba.geempre com filtros e paginação.
 
@@ -469,13 +475,15 @@ class ODBCConnectionManager:
                                       Ex: {'razao_emp': 'nome', 'codi_emp': 1, 'cgce_emp': 'cnpj'}
             page_number (int, optional): Número da página solicitada. Default é 1.
             page_size (int, optional): Quantidade de registros por página. Default é 50.
+            codi_emp_in_list (List[int], optional): Lista de codi_emp para filtrar com cláusula IN.
 
         Returns:
             dict: Contendo 'success' (bool), 'data' (list), 'total_records' (int),
                   'current_page' (int), 'page_size' (int), e 'error' (str, se houver falha).
         """
         logger.info(
-            f"list_empresas chamado com filters: {filters}, page: {page_number}, size: {page_size}"
+            f"list_empresas chamado com filters: {filters}, page: {page_number}, size: {page_size}, "
+            f"codi_emp_in_list: count={len(codi_emp_in_list) if codi_emp_in_list else 0}"
         )
 
         config = self.get_connection_config()
@@ -525,22 +533,45 @@ class ODBCConnectionManager:
             # String para armazenar as cláusulas WHERE
             where_clauses = []
 
-            if filters:
+            if filters: # Filtros básicos
                 if filters.get("codi_emp"):
                     where_clauses.append("codi_emp = ?")
                     params.append(filters["codi_emp"])
 
                 if filters.get("cgce_emp"):
-                    # Remover caracteres não numéricos do CNPJ/CGC para busca, se necessário
-                    # Aqui, assumimos que o valor em filters['cgce_emp'] já está formatado ou que o banco lida com isso.
                     where_clauses.append("cgce_emp = ?")
                     params.append(filters["cgce_emp"])
 
                 if filters.get("razao_emp"):
-                    where_clauses.append(
-                        "UPPER(razao_emp) LIKE ?"
-                    )  # SQL Anywhere é geralmente case-insensitive, mas UPPER é mais seguro.
+                    where_clauses.append("UPPER(razao_emp) LIKE ?")
                     params.append(f"%{filters['razao_emp'].upper()}%")
+            
+            # Adicionar filtro por lista de codi_emp se fornecido
+            if codi_emp_in_list:
+                if not codi_emp_in_list: # Se a lista for vazia, nenhuma empresa corresponderá
+                    # Podemos otimizar retornando um resultado vazio aqui para evitar consulta desnecessária
+                    # No entanto, a lógica de contagem ainda pode precisar ser executada ou ajustada
+                    # Por ora, uma lista vazia de IDs resultará em `codi_emp IN ()` que pode falhar ou não retornar nada.
+                    # Melhor tratar como um caso onde a query não retorna nada.
+                    # Para SQL Anywhere, uma lista vazia em IN é um erro de sintaxe.
+                    # Portanto, se a lista for explicitamente vazia, não adicionamos a cláusula ou retornamos vazio.
+                    # Se o serviço que chama garante que não vai passar lista vazia, melhor.
+                    # Assumindo que se `codi_emp_in_list` for fornecido, ele não é vazio.
+                    # Se ele *puder* ser vazio, o serviço chamador (EmpresaSincronizacaoService) deve
+                    # lidar com isso e não chamar list_empresas ou esperar um resultado vazio.
+                    # Para segurança, se for uma lista vazia, não adicionamos a cláusula, efetivamente não filtrando por ela aqui.
+                    # No entanto, a intenção é que se for passada, é para filtrar. Se vazia, o chamador já deve ter retornado.
+                    pass # O serviço chamador deve garantir que a lista não seja vazia se o filtro for ativo.
+
+                # Criar placeholders para a cláusula IN: (?, ?, ...)
+                # E adicionar os codi_emps aos parâmetros
+                # Cuidado: SQL Anywhere (e outros) podem ter limites no número de itens em uma cláusula IN.
+                # Para um número muito grande, seriam necessárias outras estratégias (tabela temporária, etc.)
+                # Para esta implementação, assumimos que a lista não é excessivamente grande.
+                if codi_emp_in_list: # Re-verificando para ter certeza que não é None e não é vazia implicitamente
+                    placeholders = ", ".join(["?" for _ in codi_emp_in_list])
+                    where_clauses.append(f"codi_emp IN ({placeholders})")
+                    params.extend(codi_emp_in_list)
 
             # Montar a cláusula WHERE final
             where_sql = ""

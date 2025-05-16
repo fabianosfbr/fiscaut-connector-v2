@@ -63,77 +63,67 @@ class EmpresaSincronizacaoService:
         filters: Optional[Dict[str, Any]] = None,
         page_number: int = 1,
         page_size: int = 50,
-        filtro_sincronizacao: Optional[
-            str
-        ] = None,  # 'todas', 'habilitada', 'desabilitada'
+        filtro_sincronizacao: Optional[str] = None  # 'todas', 'habilitada', 'desabilitada'
     ) -> Dict[str, Any]:
         """
         Lista empresas do ODBC e adiciona o status de sincronização do Fiscaut.
-        Permite filtrar por status de sincronização.
-
-        A filtragem por status de sincronização ('habilitada', 'desabilitada') é aplicada
-        EM MEMÓRIA após a busca paginada do ODBC. Isso significa que `total_records`
-        reflete a contagem ANTES desse filtro em memória, e a página de dados pode
-        conter menos itens que `page_size` se muitos forem filtrados.
-        Para uma filtragem e paginação precisas no banco, seria necessário modificar
-        o `odbc_manager.list_empresas` para aceitar uma lista de `codi_emp` filtrados.
-
-        Args:
-            filters: Filtros para a consulta ODBC (ex: nome da empresa).
-            page_number: Número da página.
-            page_size: Tamanho da página.
-            filtro_sincronizacao: 'todas', 'habilitada', ou 'desabilitada'.
-
-        Returns:
-            Dicionário similar ao de odbc_manager.list_empresas, mas com um campo
-            'habilitada_sincronizacao' para cada empresa e potencialmente filtrado.
+        Permite filtrar por status de sincronização de forma eficiente.
         """
+        
+        codi_emps_para_filtrar_odbc: Optional[List[int]] = None
+        sinc_status_para_enriquecimento: Optional[bool] = None
 
-        # NOTA: A lógica de filtro_sincronizacao abaixo tem implicações na paginação.
-        # Se um filtro de sincronização ('habilitada'/'desabilitada') é aplicado, ele ocorre
-        # APÓS a consulta paginada ao ODBC. Isso é uma simplificação.
-        # Uma solução mais robusta passaria os codi_emps filtrados para a consulta ODBC.
+        if filtro_sincronizacao and filtro_sincronizacao != 'todas':
+            sinc_habilitada_desejada = filtro_sincronizacao == 'habilitada'
+            sinc_status_para_enriquecimento = sinc_habilitada_desejada
+            
+            codi_emps_para_filtrar_odbc = list(EmpresaSincronizacao.objects.filter(
+                habilitada_sincronizacao=sinc_habilitada_desejada
+            ).values_list('codi_emp', flat=True))
 
+            if not codi_emps_para_filtrar_odbc:
+                # Nenhuma empresa local corresponde a este status de sincronização,
+                # então não há nada a buscar no ODBC que corresponderia.
+                return {
+                    "success": True, "data": [], "total_records": 0, 
+                    "current_page": page_number, "page_size": page_size, "error": None
+                }
+        
+        # Chamar o ODBC manager, passando a lista de codi_emps se o filtro estiver ativo
         empresas_odbc_result = self.odbc_manager.list_empresas(
-            filters, page_number, page_size
+            filters=filters, 
+            page_number=page_number, 
+            page_size=page_size,
+            codi_emp_in_list=codi_emps_para_filtrar_odbc # Passa a lista aqui
         )
 
         if not empresas_odbc_result.get("success"):
-            return empresas_odbc_result
+            return empresas_odbc_result # Retorna o erro do ODBC
 
         empresas_data = empresas_odbc_result.get("data", [])
-        codi_emps_encontrados_odbc = [
-            emp.get("codi_emp")
-            for emp in empresas_data
-            if emp.get("codi_emp") is not None
-        ]
 
-        if not codi_emps_encontrados_odbc:
-            return empresas_odbc_result  # Nenhuma empresa do ODBC, retorna como está
+        if not empresas_data:
+             return empresas_odbc_result # Nenhuma empresa do ODBC, retorna como está
 
-        status_sincronizacao = self.get_status_sincronizacao_empresas(
-            codi_emps_encontrados_odbc
-        )
+        # Enriquecer com o status de sincronização
+        if sinc_status_para_enriquecimento is not None:
+            # Se filtramos por status, todas as empresas retornadas devem ter esse status
+            for emp in empresas_data:
+                emp['habilitada_sincronizacao'] = sinc_status_para_enriquecimento
+        else:
+            # Se o filtro era 'todas', precisamos buscar o status individualmente
+            codi_emps_encontrados_odbc = [emp.get('codi_emp') for emp in empresas_data if emp.get('codi_emp') is not None]
+            if codi_emps_encontrados_odbc:
+                status_sincronizacao_map = self.get_status_sincronizacao_empresas(codi_emps_encontrados_odbc)
+                for emp in empresas_data:
+                    cod_emp = emp.get('codi_emp')
+                    if cod_emp is not None:
+                        emp['habilitada_sincronizacao'] = status_sincronizacao_map.get(cod_emp, False)
+            else: # Caso raro: empresas_data não vazia, mas sem codi_emp
+                 for emp in empresas_data:
+                    emp['habilitada_sincronizacao'] = False # Default
 
-        empresas_enriquecidas_e_filtradas = []
-        for emp in empresas_data:
-            cod_emp = emp.get("codi_emp")
-            if cod_emp is not None:
-                emp["habilitada_sincronizacao"] = status_sincronizacao.get(
-                    cod_emp, False
-                )
-
-                if filtro_sincronizacao and filtro_sincronizacao != "todas":
-                    sinc_habilitada_desejada = filtro_sincronizacao == "habilitada"
-                    if emp["habilitada_sincronizacao"] == sinc_habilitada_desejada:
-                        empresas_enriquecidas_e_filtradas.append(emp)
-                else:  # 'todas' ou sem filtro de sincronização específico
-                    empresas_enriquecidas_e_filtradas.append(emp)
-
-        empresas_odbc_result["data"] = empresas_enriquecidas_e_filtradas
-        # A `total_records` e paginação ainda são as do ODBC antes do filtro em memória.
-        # A UI pode mostrar menos itens na página do que `page_size` devido ao filtro em memória.
-
+        empresas_odbc_result['data'] = empresas_data
         return empresas_odbc_result
 
 

@@ -62,17 +62,37 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.cgce_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.razao_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                            <button 
-                                @click="toggleSincronizacao(codiEmp, habilitada, $event)"
+                            <button
+                                @click="
+                                    const parentScope = Alpine.closestDataStack($el)[1];
+                                    parentScope.isLoadingToggle = true;
+                                    parentScope.toggleSincronizacaoApi(codiEmp, !habilitada)
+                                        .then(data => {
+                                            if (data.success) {
+                                                habilitada = !habilitada; // Atualiza o estado local diretamente
+                                                parentScope.showMessage(data.message, 'success');
+                                            } else {
+                                                parentScope.showMessage(data.message || 'Erro ao atualizar status.', 'error');
+                                            }
+                                        })
+                                        .catch(error => {
+                                            console.error('Erro ao tentar sincronizar empresa:', error);
+                                            parentScope.showMessage(error.message || 'Erro de comunicação ao tentar atualizar.', 'error');
+                                        })
+                                        .finally(() => {
+                                            parentScope.isLoadingToggle = false;
+                                            // feather.replace(); // Não é estritamente necessário aqui, mas pode ser se algo mais mudar
+                                        });
+                                "
                                 :class="{
                                     'bg-green-500 hover:bg-green-600': habilitada,
                                     'bg-gray-300 hover:bg-gray-400': !habilitada
-                                }" 
+                                }"
                                 class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                 type="button" role="switch" :aria-checked="habilitada.toString()">
                                 <span class="sr-only">Sincronizar empresa</span>
-                                <span 
-                                    :class="{ 'translate-x-6': habilitada, 'translate-x-1': !habilitada }" 
+                                <span
+                                    :class="{ 'translate-x-6': habilitada, 'translate-x-1': !habilitada }"
                                     class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out pointer-events-none ring-0">
                                 </span>
                             </button>
@@ -218,75 +238,45 @@
                 return null; 
             },
 
-            toggleSincronizacao(codiEmp, currentStatus, event) { // Adicionado event
-                this.isLoadingToggle = true;
-                const novoStatus = !currentStatus;
+            async toggleSincronizacaoApi(codiEmp, novoStatus) {
                 const csrfToken = this.getCsrfToken();
 
                 if (!csrfToken) {
                     console.error('CSRF token não encontrado!');
-                    this.showMessage('Erro de segurança. Tente recarregar a página.', 'error');
-                    this.isLoadingToggle = false;
-                    return;
+                    // Lança o erro para ser pego pelo .catch() no @click
+                    throw new Error('Erro de segurança. Token CSRF ausente.');
                 }
 
-                fetch(`{% url 'sync_api_toggle_empresa_sincronizacao' %}`, {
+                const response = await fetch(`{% url 'sync_api_toggle_empresa_sincronizacao' %}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({ 
-                        codi_emp: codiEmp, 
-                        habilitar: novoStatus 
+                    body: JSON.stringify({
+                        codi_emp: codiEmp,
+                        habilitar: novoStatus
                     })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        // Tenta extrair uma mensagem de erro do corpo JSON se a resposta não for OK
-                        return response.json().then(errData => {
-                            throw new Error(errData.message || `Erro HTTP: ${response.status}`);
-                        }).catch(() => {
-                            // Se não conseguir parsear o JSON do erro, lança um erro genérico
-                            throw new Error(`Erro HTTP: ${response.status}`);
-                        });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        const trElement = event.target.closest('tr');
-                        if (trElement && trElement.__x) {
-                            trElement.__x.run(() => {
-                                trElement.__x.scope.habilitada = novoStatus;
-                            });
-                        }
-                        this.showMessage(data.message, 'success');
-                    } else {
-                        // Se a API retorna success:false, mas a requisição foi ok (status 2xx)
-                        this.showMessage(data.message || 'Erro ao atualizar.', 'error');
-                        const trElement = event.target.closest('tr');
-                        if (trElement && trElement.__x) {
-                             trElement.__x.run(() => {
-                                trElement.__x.scope.habilitada = currentStatus; // Reverte
-                            });
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                    this.showMessage(error.message || 'Erro de comunicação com o servidor.', 'error');
-                    const trElement = event.target.closest('tr');
-                    if (trElement && trElement.__x) {
-                        trElement.__x.run(() => {
-                            trElement.__x.scope.habilitada = currentStatus; // Reverte
-                        });
-                    }
-                })
-                .finally(() => {
-                    this.isLoadingToggle = false;
-                    feather.replace(); 
                 });
+
+                const responseData = await response.json().catch(() => {
+                     // Se o corpo não for JSON ou estiver vazio, mas a requisição não foi 'ok'
+                    if (!response.ok) throw new Error(`Erro HTTP: ${response.status} - Resposta não JSON ou vazia.`);
+                    return { success: response.ok }; // Para respostas 204 No Content, por exemplo
+                });
+                
+                if (!response.ok) {
+                    throw new Error(responseData.message || `Erro HTTP: ${response.status}`);
+                }
+                
+                // Adiciona a propriedade success baseada no status HTTP se não vier no corpo.
+                // Muitas APIs retornam 200 OK com um corpo { "message": "..." } mas sem "success": true
+                // ou 204 No Content em caso de sucesso sem corpo.
+                if (typeof responseData.success === 'undefined') {
+                    responseData.success = response.ok;
+                }
+
+                return responseData;
             },
 
             showMessage(message, type = 'info') {

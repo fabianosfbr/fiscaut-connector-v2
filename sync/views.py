@@ -379,10 +379,8 @@ class EmpresasListView(TemplateView):
         context["active_page"] = "empresas"
 
         page_number = self.request.GET.get("page", 1)
-        # Filtros básicos (exemplo: por nome da empresa, etc.)
-        # Estes viriam do request.GET, por exemplo:
         search_filters = {}
-        nome_empresa_filter = self.request.GET.get("nome_empresa", None)
+        nome_empresa_filter = self.request.GET.get("razao_emp", None)
         if nome_empresa_filter:
             search_filters["razao_emp"] = nome_empresa_filter
 
