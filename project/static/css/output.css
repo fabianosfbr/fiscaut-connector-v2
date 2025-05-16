@@ -1242,6 +1242,11 @@ select {
   width: 100%;
 }
 
+.w-max {
+  width: -moz-max-content;
+  width: max-content;
+}
+
 .min-w-\[150px\] {
   min-width: 150px;
 }
