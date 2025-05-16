@@ -1,4 +1,4 @@
-{% extends "admin/base.html" %}
+{% extends "sync/base.html" %}
 {% load static %}
 
 {% block title %}Dashboard - Painel Administrativo{% endblock %}
@@ -415,7 +415,7 @@
             },
             
             goToSettings() {
-                window.location.href = '{% url "admin_settings" %}';
+                window.location.href = '{% url "sync_config_settings" %}';
             },
             
             openHelpCenter() {
