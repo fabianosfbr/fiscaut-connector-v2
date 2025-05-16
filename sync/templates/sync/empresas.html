@@ -57,13 +57,13 @@
             </thead>
             <tbody class="divide-y divide-gray-200">
                 {% for empresa in empresas_list %}
-                    <tr x-data="{ habilitada: {{ empresa.habilitada_sincronizacao|yesno:'true,false' }}, codiEmp: {{ empresa.codi_emp }} }">
+                    <tr x-data="{ habilitada: {% if empresa.habilitada_sincronizacao %}true{% else %}false{% endif %}, codiEmp: {{ empresa.codi_emp }} }">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.codi_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.cgce_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.razao_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                             <button 
-                                @click="toggleSincronizacao(codiEmp, habilitada)"
+                                @click="toggleSincronizacao(codiEmp, habilitada, $event)"
                                 :class="{
                                     'bg-green-500 hover:bg-green-600': habilitada,
                                     'bg-gray-300 hover:bg-gray-400': !habilitada
@@ -104,7 +104,7 @@
                     {% else %}
                         registros {{ page_obj.start_index }} a {{ page_obj.end_index }}
                     {% endif %}
-                    de <span x-text="totalRecordsMessage">{{ page_obj.paginator.count }}</span>.
+                    de <span x-text="totalRecordsMessage">{% if page_obj %}{{ page_obj.paginator.count }}{% else %}0{% endif %}</span>.
                     <span x-show="isLoadingToggle" class="ml-2 italic text-xs">(Atualizando...)</span>
                 {% else %}
                      0 registros de 0.
@@ -203,16 +203,11 @@
     function empresasPage() {
         return {
             isLoadingToggle: false,
-            totalRecordsMessage: "{{ page_obj.paginator.count|default:0 }}", // Inicializa com valor do Django
-            // csrfToken: document.querySelector('[name=csrfmiddlewaretoken]').value, // Pegar o token CSRF
-
+            totalRecordsMessage: "{% if page_obj %}{{ page_obj.paginator.count }}{% else %}0{% endif %}", // Corrigido
+            
             getCsrfToken() {
-                // Tenta pegar de um input. Se não existir, tenta de um cookie (comum em setups com JS puro/Alpine)
                 let tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
                 if (tokenInput) return tokenInput.value;
-                
-                // Fallback para cookie se o input não estiver presente
-                // (O Django geralmente define um cookie chamado 'csrftoken')
                 const cookies = document.cookie.split(';');
                 for (let i = 0; i < cookies.length; i++) {
                     let cookie = cookies[i].trim();
@@ -220,10 +215,10 @@
                         return cookie.substring('csrftoken='.length, cookie.length);
                     }
                 }
-                return null; // ou levante um erro se o token for sempre esperado
+                return null; 
             },
 
-            toggleSincronizacao(codiEmp, currentStatus) {
+            toggleSincronizacao(codiEmp, currentStatus, event) { // Adicionado event
                 this.isLoadingToggle = true;
                 const novoStatus = !currentStatus;
                 const csrfToken = this.getCsrfToken();
@@ -246,35 +241,33 @@
                         habilitar: novoStatus 
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        // Tenta extrair uma mensagem de erro do corpo JSON se a resposta não for OK
+                        return response.json().then(errData => {
+                            throw new Error(errData.message || `Erro HTTP: ${response.status}`);
+                        }).catch(() => {
+                            // Se não conseguir parsear o JSON do erro, lança um erro genérico
+                            throw new Error(`Erro HTTP: ${response.status}`);
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
-                        // Atualiza o estado local do toggle na UI
-                        // Encontra a linha da tabela e atualiza o x-data 'habilitada'
-                        // Isso requer que o Alpine.js possa reavaliar o estado.
-                        // Uma forma é atualizar o `habilitada` no escopo do `<tr>`.
-                        // A maneira como está (passando currentStatus e esperando que o Alpine 
-                        // no `<tr>` reaja) pode não ser suficiente. 
-                        // Vamos tentar atualizar o `habilitada` diretamente no elemento.
                         const trElement = event.target.closest('tr');
-                        if (trElement && trElement.__x) { // __x é onde o Alpine armazena o contexto
+                        if (trElement && trElement.__x) {
                             trElement.__x.run(() => {
                                 trElement.__x.scope.habilitada = novoStatus;
                             });
                         }
                         this.showMessage(data.message, 'success');
-                        // Se o filtro atual for 'habilitada' ou 'desabilitada',
-                        // a empresa pode desaparecer/aparecer. Idealmente, recarregaria a lista.
-                        // Por simplicidade, apenas mostramos a mensagem.
-                        // Poderíamos fazer: window.location.reload(); 
-                        // ou uma atualização mais inteligente da lista se tivéssemos IDs nos TRs
                     } else {
+                        // Se a API retorna success:false, mas a requisição foi ok (status 2xx)
                         this.showMessage(data.message || 'Erro ao atualizar.', 'error');
-                        // Reverter o toggle visualmente se a API falhar
-                        // (já que o estado local foi alterado otimisticamente antes da chamada)
-                         const trElement = event.target.closest('tr');
+                        const trElement = event.target.closest('tr');
                         if (trElement && trElement.__x) {
-                            trElement.__x.run(() => {
+                             trElement.__x.run(() => {
                                 trElement.__x.scope.habilitada = currentStatus; // Reverte
                             });
                         }
@@ -282,8 +275,7 @@
                 })
                 .catch(error => {
                     console.error('Fetch error:', error);
-                    this.showMessage('Erro de comunicação com o servidor.', 'error');
-                    // Reverter visualmente
+                    this.showMessage(error.message || 'Erro de comunicação com o servidor.', 'error');
                     const trElement = event.target.closest('tr');
                     if (trElement && trElement.__x) {
                         trElement.__x.run(() => {
@@ -293,12 +285,13 @@
                 })
                 .finally(() => {
                     this.isLoadingToggle = false;
-                    feather.replace(); // Re-renderizar ícones feather se necessário (ex: em mensagens)
+                    feather.replace(); 
                 });
             },
 
             showMessage(message, type = 'info') {
                 const container = document.getElementById('message-container');
+                if (!container) return; // Não faz nada se o container não existir
                 const messageId = `message-${Date.now()}`;
                 
                 let bgColor, textColor, borderColor, icon;
@@ -324,7 +317,7 @@
                     </button>
                 `;
                 container.appendChild(messageDiv);
-                feather.replace(); // Para renderizar o ícone dentro da nova mensagem
+                feather.replace(); 
 
                 setTimeout(() => {
                     const el = document.getElementById(messageId);
