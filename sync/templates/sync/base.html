@@ -29,6 +29,12 @@
                     <i data-feather="grid" class="w-5 h-5"></i>
                     <span>Dashboard</span>
                 </a>
+
+                <a href="{% url 'sync_empresas_list' %}" class="sidebar-item {% if active_page == 'empresas' %}active{% endif %}">
+                    <i data-feather="briefcase" class="w-5 h-5"></i>
+                    <span>Empresas</span>
+                </a>
+                
                 <a href="{% url 'sync_users' %}" class="sidebar-item {% if active_page == 'users' %}active{% endif %}">
                     <i data-feather="users" class="w-5 h-5"></i>
                     <span>Usuários</span>
@@ -41,6 +47,7 @@
                     <i data-feather="activity" class="w-5 h-5"></i>
                     <span>Logs</span>
                 </a>
+
             </nav>
         </div>
     </aside>

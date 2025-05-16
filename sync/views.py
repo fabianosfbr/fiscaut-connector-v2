@@ -7,6 +7,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from sync.services.odbc_connection import odbc_manager
 import logging
+from django.core.paginator import Paginator
+from django.contrib import messages
 
 logger = logging.getLogger(__name__)
 
@@ -362,6 +364,73 @@ class LogsView(TemplateView):
                         "timestamp": "14/05/2025 10:45:21",
                     },
                 ],
+            }
+        )
+        return context
+
+
+class EmpresasListView(TemplateView):
+    template_name = "sync/empresas.html"
+    page_size = 50
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        request = self.request
+
+        page_number = request.GET.get("page", 1)
+        try:
+            page_number = int(page_number)
+            if page_number < 1:
+                page_number = 1
+        except ValueError:
+            page_number = 1
+
+        filters = {
+            "codi_emp": request.GET.get("codi_emp", None),
+            "cgce_emp": request.GET.get("cgce_emp", None),
+            "razao_emp": request.GET.get("razao_emp", None),
+        }
+        active_filters = {k: v for k, v in filters.items() if v}
+
+        empresas_result = odbc_manager.list_empresas(
+            filters=active_filters, page_number=page_number, page_size=self.page_size
+        )
+
+        empresas_list = []
+        page_obj = None
+
+        if empresas_result["success"]:
+            empresas_list = empresas_result["data"]
+            total_records = empresas_result["total_records"]
+
+            if total_records > 0:
+                paginator_obj_list = range(total_records)
+                paginator = Paginator(paginator_obj_list, self.page_size)
+                page_obj = paginator.get_page(page_number)
+            else:
+                paginator = Paginator([], self.page_size)
+                page_obj = paginator.get_page(1)
+
+            if not empresas_list and page_number > 1 and total_records > 0:
+                pass
+
+        else:
+            messages.error(
+                request, f"Erro ao carregar empresas: {empresas_result['error']}"
+            )
+            logger.error(
+                f"Falha ao carregar dados de empresas para a view: {empresas_result['error']}"
+            )
+            paginator = Paginator([], self.page_size)
+            page_obj = paginator.get_page(1)
+
+        context.update(
+            {
+                "active_page": "empresas",
+                "empresas_list": empresas_list,
+                "page_obj": page_obj,
+                "current_filters": filters,
+                "total_records": total_records if empresas_result["success"] else 0,
             }
         )
         return context

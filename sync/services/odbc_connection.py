@@ -316,59 +316,41 @@ class ODBCConnectionManager:
             result["error_details"] = {"type": "value_error", "message": error_msg}
             logger.error(f"Erro de valor no teste de conexão ODBC: {error_msg}")
 
-        except pyodbc.Error as pe:
-            # Erro específico do pyodbc
-            error_msg = str(pe)
-            result["error"] = error_msg
-
-            # Analisar o erro para fornecer detalhes mais específicos
-            error_details = {
-                "type": "pyodbc_error",
-                "code": getattr(pe, "code", None),
-                "state": getattr(pe, "state", None),
-                "message": error_msg,
+        except pyodbc.Error as ex:
+            sqlstate = ex.args[0]
+            error_message = str(ex)
+            logger.error(
+                f"Erro de conexão ODBC (test_connection): {sqlstate} - {error_message}"
+            )
+            # Tentar extrair informações mais detalhadas se disponíveis
+            detailed_error = self._extract_detailed_error(error_message)
+            return {
+                "success": False,
+                "error": f"Erro ODBC: {detailed_error['message']}",
+                "driver_version": result["driver_version"],
+                "dbms_version": result["dbms_version"],
+                "databases": result["databases"],
+                "connection_string": result["connection_string"],
+                "error_details": detailed_error,
             }
-
-            # Classificação de tipos comuns de erros
-            if (
-                "data source name" in error_msg.lower()
-                and "not found" in error_msg.lower()
-            ):
-                error_details["specific_type"] = "dsn_not_found"
-                error_details["suggestion"] = (
-                    "Verifique se o DSN está configurado corretamente no sistema"
-                )
-            elif (
-                "login failed" in error_msg.lower()
-                or "password" in error_msg.lower()
-                or "autorização" in error_msg.lower()
-            ):
-                error_details["specific_type"] = "authentication_failed"
-                error_details["suggestion"] = "Verifique as credenciais (usuário/senha)"
-            elif "driver" in error_msg.lower():
-                error_details["specific_type"] = "driver_error"
-                error_details["suggestion"] = (
-                    "Verifique se o driver ODBC está instalado corretamente"
-                )
-            elif "timeout" in error_msg.lower():
-                error_details["specific_type"] = "connection_timeout"
-                error_details["suggestion"] = (
-                    "Verifique a conectividade de rede e se o servidor está acessível"
-                )
-
-            result["error_details"] = error_details
-            logger.error(f"Erro PyODBC no teste de conexão: {error_msg}")
-
         except Exception as e:
-            # Erro genérico
-            error_msg = str(e)
-            result["error"] = error_msg
-            result["error_details"] = {
-                "type": "generic_error",
-                "exception_type": type(e).__name__,
-                "message": error_msg,
+            logger.error(f"Erro inesperado em test_connection: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Erro inesperado: {str(e)}",
+                "driver_version": "",
+                "dbms_version": "",
+                "databases": [],
+                "connection_string": result["connection_string"],
+                "error_details": {
+                    "type": type(e).__name__,
+                    "message": str(e),
+                    "suggestion": "Verifique os logs do servidor.",
+                },
             }
-            logger.error(f"Erro genérico no teste de conexão ODBC: {error_msg}")
+        finally:
+            if "connection" in locals() and connection:
+                connection.close()
 
         return result
 
@@ -458,6 +440,231 @@ class ODBCConnectionManager:
             error_msg = str(e)
             logger.error(f"Erro ao executar comando SQL: {error_msg}")
             return False, 0, error_msg
+
+    def list_empresas(self, filters=None, page_number=1, page_size=50):
+        """
+        Lista empresas da tabela bethadba.geempre com filtros e paginação.
+
+        Args:
+            filters (dict, optional): Dicionário com filtros.
+                                      Ex: {'razao_emp': 'nome', 'codi_emp': 1, 'cgce_emp': 'cnpj'}
+            page_number (int, optional): Número da página solicitada. Default é 1.
+            page_size (int, optional): Quantidade de registros por página. Default é 50.
+
+        Returns:
+            dict: Contendo 'success' (bool), 'data' (list), 'total_records' (int),
+                  'current_page' (int), 'page_size' (int), e 'error' (str, se houver falha).
+        """
+        logger.info(
+            f"list_empresas chamado com filters: {filters}, page: {page_number}, size: {page_size}"
+        )
+
+        config = self.get_connection_config()
+        if not config or not config.get("dsn"):
+            logger.error(
+                "Configuração ODBC não encontrada ou incompleta para list_empresas."
+            )
+            return {
+                "success": False,
+                "data": [],
+                "total_records": 0,
+                "current_page": page_number,
+                "page_size": page_size,
+                "error": "Configuração ODBC não encontrada. Por favor, configure a conexão primeiro.",
+            }
+
+        dsn = config.get("dsn")
+        uid = config.get("uid")
+        pwd = config.get("pwd")
+        driver = config.get("driver", None)
+
+        conn_str = f"DSN={dsn};UID={uid};PWD={pwd};"
+        if driver:
+            conn_str = f"DRIVER={{{driver}}};{conn_str}"
+
+        cnxn = None
+        try:
+            logger.debug(f"Tentando conectar via ODBC para list_empresas: DSN={dsn}")
+            # Adicionando timeout à conexão para evitar bloqueios indefinidos
+            # O timeout padrão do pyodbc para login é geralmente 0 (sem timeout) ou depende do driver.
+            # Alguns drivers podem aceitar LoginTimeout ou ConnectionTimeout na string de conexão.
+            # pyodbc.connect também tem um parâmetro timeout.
+            cnxn = pyodbc.connect(conn_str, timeout=self.DEFAULT_TIMEOUT)
+            logger.info(
+                f"Conexão ODBC estabelecida com sucesso para list_empresas (DSN: {dsn})."
+            )
+
+            cursor = cnxn.cursor()
+
+            # Query base para buscar os dados das empresas
+            base_query_select = (
+                "SELECT codi_emp, cgce_emp, razao_emp FROM bethadba.geempre"
+            )
+
+            # Query base para contagem total de registros (para paginação)
+            base_query_count = "SELECT COUNT(*) FROM bethadba.geempre"
+
+            # Lista para armazenar os parâmetros da query (para filtros)
+            params = []
+
+            # String para armazenar as cláusulas WHERE
+            where_clauses = []
+
+            if filters:
+                if filters.get("codi_emp"):
+                    where_clauses.append("codi_emp = ?")
+                    params.append(filters["codi_emp"])
+
+                if filters.get("cgce_emp"):
+                    # Remover caracteres não numéricos do CNPJ/CGC para busca, se necessário
+                    # Aqui, assumimos que o valor em filters['cgce_emp'] já está formatado ou que o banco lida com isso.
+                    where_clauses.append("cgce_emp = ?")
+                    params.append(filters["cgce_emp"])
+
+                if filters.get("razao_emp"):
+                    where_clauses.append(
+                        "UPPER(razao_emp) LIKE ?"
+                    )  # SQL Anywhere é geralmente case-insensitive, mas UPPER é mais seguro.
+                    params.append(f"%{filters['razao_emp'].upper()}%")
+
+            # Montar a cláusula WHERE final
+            where_sql = ""
+            if where_clauses:
+                where_sql = " WHERE " + " AND ".join(where_clauses)
+
+            # Anexar cláusulas WHERE às queries base
+            final_query_select = base_query_select + where_sql
+            final_query_count = base_query_count + where_sql
+
+            # Adicionar ordenação para paginação consistente
+            order_by_sql = " ORDER BY codi_emp ASC"
+            final_query_select += order_by_sql
+
+            logger.debug(f"Query de contagem: {final_query_count}, Params: {params}")
+            logger.debug(
+                f"Query de seleção (com ordenação, antes da paginação): {final_query_select}, Params: {params}"
+            )
+
+            # Lógica de Paginação para SQL Anywhere
+            # SQL Anywhere usa TOP N START AT M, onde M é 1-indexed.
+            # page_number é 1-indexed vindo da view.
+            start_at = ((page_number - 1) * page_size) + 1
+
+            # Modificar a query de seleção para incluir a paginação
+            # Ex: SELECT TOP 50 START AT 1 codi_emp, ... FROM ... ORDER BY ...
+            # Precisamos inserir TOP e START AT no lugar certo.
+            # A forma mais robusta é reconstruir a select part.
+            select_clause = f"SELECT TOP {page_size} START AT {start_at} codi_emp, cgce_emp, razao_emp"
+            from_where_order_clauses = final_query_select.split("FROM", 1)[
+                1
+            ]  # Pega tudo a partir de FROM
+            final_query_select_paginated = (
+                f"{select_clause} FROM {from_where_order_clauses}"
+            )
+
+            logger.debug(
+                f"Query de seleção final (paginada): {final_query_select_paginated}, Params: {params}"
+            )
+
+            total_records = 0
+            empresas_data = []
+
+            # Executar query de contagem
+            try:
+                cursor.execute(final_query_count, *params)
+                count_result = cursor.fetchone()
+                if count_result:
+                    total_records = count_result[0]
+                logger.info(f"Total de registros encontrados: {total_records}")
+            except pyodbc.Error as ex:
+                sqlstate_count = ex.args[0]
+                error_message_count = str(ex)
+                logger.error(
+                    f"Erro ao executar query de contagem (DSN: {dsn}): {sqlstate_count} - {error_message_count} | Query: {final_query_count} | Params: {params}"
+                )
+                # Continuar para tentar buscar dados, mas total_records será 0 ou o que foi antes do erro.
+                # Ou podemos decidir retornar erro aqui mesmo.
+                # Por ora, vamos permitir que a busca de dados prossiga, mas o erro será logado.
+                # Se a contagem é crucial para a paginação da UI e falha, talvez seja melhor retornar erro.
+                # Para simplificar, vamos assumir que se a contagem falhar, a listagem pode prosseguir com contagem 0 e a UI lida com isso.
+                pass  # Erro já logado.
+
+            # Executar query de seleção de dados (somente se total_records > 0 ou se a paginação permitir offset 0)
+            # E se a página solicitada faz sentido (start_at <= total_records ou total_records=0 para a primeira página)
+            if total_records > 0 and start_at <= total_records:
+                try:
+                    cursor.execute(
+                        final_query_select_paginated, *params
+                    )  # Mesmos params da contagem
+                    rows = cursor.fetchall()
+                    empresas_data = [
+                        dict(zip([column[0] for column in cursor.description], row))
+                        for row in rows
+                    ]
+                    logger.info(
+                        f"{len(empresas_data)} empresas carregadas para a página {page_number}."
+                    )
+                except pyodbc.Error as ex:
+                    sqlstate_select = ex.args[0]
+                    error_message_select = str(ex)
+                    logger.error(
+                        f"Erro ao executar query de seleção (DSN: {dsn}): {sqlstate_select} - {error_message_select} | Query: {final_query_select_paginated} | Params: {params}"
+                    )
+                    # Retornar erro aqui é mais crítico, pois não teremos dados.
+                    raise  # Repassar a exceção para o bloco catch principal de list_empresas
+            elif (
+                total_records == 0 and page_number == 1
+            ):  # Se não há registros, mas é a primeira página
+                logger.info("Nenhum registro encontrado para os filtros aplicados.")
+                empresas_data = []  # Garante que seja uma lista vazia
+            elif (
+                start_at > total_records and total_records > 0
+            ):  # Página solicitada está além do total de registros
+                logger.info(
+                    f"Página {page_number} solicitada está fora do alcance. Total de registros: {total_records}."
+                )
+                empresas_data = (
+                    []
+                )  # Garante que seja uma lista vazia, a UI não deve permitir isso idealmente.
+
+            return {
+                "success": True,
+                "data": empresas_data,
+                "total_records": total_records,
+                "current_page": page_number,
+                "page_size": page_size,
+                "error": None,
+            }
+
+        except pyodbc.Error as ex:
+            sqlstate = ex.args[0]
+            error_message = str(ex)
+            logger.error(
+                f"Erro de conexão ODBC em list_empresas (DSN: {dsn}): {sqlstate} - {error_message}"
+            )
+            detailed_error = self._extract_detailed_error(error_message)
+            return {
+                "success": False,
+                "data": [],
+                "total_records": 0,
+                "current_page": page_number,
+                "page_size": page_size,
+                "error": f"Erro ODBC ao conectar: {detailed_error.get('message', 'Erro desconhecido')}",
+            }
+        except Exception as e:
+            logger.error(f"Erro inesperado em list_empresas (DSN: {dsn}): {str(e)}")
+            return {
+                "success": False,
+                "data": [],
+                "total_records": 0,
+                "current_page": page_number,
+                "page_size": page_size,
+                "error": f"Erro inesperado no sistema: {str(e)}",
+            }
+        finally:
+            if cnxn:
+                logger.debug(f"Fechando conexão ODBC para list_empresas (DSN: {dsn}).")
+                cnxn.close()
 
 
 # Instância singleton para uso em toda a aplicação
