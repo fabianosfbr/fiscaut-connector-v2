@@ -26,6 +26,7 @@ class ODBCConnectionManager:
 
     def __init__(self):
         """Inicializa o gerenciador de conexões ODBC."""
+        self.DEFAULT_TIMEOUT = 10  # Timeout padrão para conexões em segundos
         pass
 
     def save_connection_config(
@@ -166,31 +167,45 @@ class ODBCConnectionManager:
     def build_connection_string(self, config: Dict[str, str] = None) -> str:
         """
         Constrói a string de conexão ODBC a partir da configuração.
+        O formato será DRIVER={...};DSN=...;UID=...;PWD=...
 
         Args:
             config: Configuração de conexão (opcional, se não fornecido, usa a configuração salva)
 
         Returns:
             String de conexão ODBC
+
+        Raises:
+            ValueError: Se DSN estiver ausente ou a configuração não puder ser carregada.
         """
         if config is None:
             config = self.get_connection_config()
             if not config:
-                raise ValueError("Não há configuração de conexão ODBC salva")
+                raise ValueError("Não há configuração de conexão ODBC salva ou ativa.")
 
-        # Construir string de conexão
-        conn_parts = [f"DSN={config['dsn']}"]
+        dsn = config.get('dsn')
+        uid = config.get('uid')
+        pwd = config.get('pwd')  # A senha pode ser uma string vazia
+        driver = config.get('driver')
 
-        if config.get("uid"):
-            conn_parts.append(f"UID={config['uid']}")
+        if not dsn:
+            raise ValueError("DSN (Nome da Fonte de Dados) é obrigatório na configuração ODBC.")
 
-        if config.get("pwd"):
-            conn_parts.append(f"PWD={config['pwd']}")
-
-        if config.get("driver"):
-            conn_parts.append(f"DRIVER={config['driver']}")
-
-        return ";".join(conn_parts)
+        parts = []
+        if driver:
+            # Adicionar chaves {} é uma prática comum para nomes de driver que podem conter espaços.
+            parts.append(f"DRIVER={{{driver}}}")
+        
+        parts.append(f"DSN={dsn}")
+        
+        # UID e PWD são opcionais na string de conexão dependendo do DSN/Driver.
+        # Se estiverem presentes no config (mesmo que string vazia para PWD), devem ser incluídos.
+        if uid is not None: # uid pode ser uma string vazia ou um valor. Se None, não incluir.
+            parts.append(f"UID={uid}")
+        if pwd is not None: # pwd pode ser uma string vazia. Se None, não incluir.
+            parts.append(f"PWD={pwd}")
+            
+        return ";".join(parts)
 
     def connect(self, config: Dict[str, str] = None) -> pyodbc.Connection:
         """
@@ -478,17 +493,11 @@ class ODBCConnectionManager:
         pwd = config.get("pwd")
         driver = config.get("driver", None)
 
-        conn_str = f"DSN={dsn};UID={uid};PWD={pwd};"
-        if driver:
-            conn_str = f"DRIVER={{{driver}}};{conn_str}"
+        conn_str = self.build_connection_string(config)
 
         cnxn = None
         try:
-            logger.debug(f"Tentando conectar via ODBC para list_empresas: DSN={dsn}")
-            # Adicionando timeout à conexão para evitar bloqueios indefinidos
-            # O timeout padrão do pyodbc para login é geralmente 0 (sem timeout) ou depende do driver.
-            # Alguns drivers podem aceitar LoginTimeout ou ConnectionTimeout na string de conexão.
-            # pyodbc.connect também tem um parâmetro timeout.
+            logger.debug(f"Tentando conectar via ODBC para list_empresas com string: {conn_str[:conn_str.find('PWD=') if 'PWD=' in conn_str else len(conn_str)]}...") # Log sem senha
             cnxn = pyodbc.connect(conn_str, timeout=self.DEFAULT_TIMEOUT)
             logger.info(
                 f"Conexão ODBC estabelecida com sucesso para list_empresas (DSN: {dsn})."
