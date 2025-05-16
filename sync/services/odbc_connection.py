@@ -459,7 +459,7 @@ class ODBCConnectionManager:
             error_msg = str(e)
             logger.error(f"Erro ao executar comando SQL: {error_msg}")
             return False, 0, error_msg
-        
+
     def get_empresa_by_codi_emp(self, codi_emp: int) -> Optional[Dict[str, Any]]:
         """
         Busca uma empresa pelo código.
@@ -478,7 +478,7 @@ class ODBCConnectionManager:
             SELECT codi_emp, cgce_emp, razao_emp
             FROM bethadba.geempre
             WHERE codi_emp = ?
-            """ 
+            """
             cursor.execute(query, codi_emp)
             empresa = cursor.fetchone()
 
@@ -487,9 +487,9 @@ class ODBCConnectionManager:
 
             if empresa:
                 return {
-                    "codi_emp": empresa[0], 
+                    "codi_emp": empresa[0],
                     "cgce_emp": empresa[1],
-                    "razao_emp": empresa[2]
+                    "razao_emp": empresa[2],
                 }
             return None
 
