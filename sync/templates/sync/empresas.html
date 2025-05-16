@@ -7,22 +7,30 @@
 {% block page_subtitle %}Consulta de empresas no Domínio Sistemas{% endblock %}
 
 {% block content %}
-<div class="admin-card space-y-6">
+<div class="admin-card space-y-6" x-data="empresasPage()">
     
     <!-- Formulário de Filtros Modernizado -->
     <form method="get" action="{% url 'sync_empresas_list' %}" class="p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div class="flex flex-wrap gap-4 items-end">
             <div class="flex-grow min-w-[150px]">
                 <label for="codi_emp" class="admin-label">Cód. Empresa</label>
-                <input type="number" name="codi_emp" id="codi_emp" value="{{ current_filters.codi_emp|default:'' }}" class="admin-input w-full">
+                <input type="number" name="codi_emp" id="codi_emp" value="{{ current_codi_emp|default:'' }}" class="admin-input w-full">
             </div>
             <div class="flex-grow min-w-[200px]">
                 <label for="cgce_emp" class="admin-label">CNPJ/CGC</label>
-                <input type="text" name="cgce_emp" id="cgce_emp" value="{{ current_filters.cgce_emp|default:'' }}" class="admin-input w-full">
+                <input type="text" name="cgce_emp" id="cgce_emp" value="{{ current_cgce_emp|default:'' }}" class="admin-input w-full">
             </div>
             <div class="flex-grow min-w-[250px] flex-auto">
                 <label for="razao_emp" class="admin-label">Razão Social</label>
-                <input type="text" name="razao_emp" id="razao_emp" value="{{ current_filters.razao_emp|default:'' }}" class="admin-input w-full">
+                <input type="text" name="razao_emp" id="razao_emp" value="{{ current_nome_empresa|default:'' }}" class="admin-input w-full">
+            </div>
+            <div class="flex-grow min-w-[180px]">
+                <label for="filtro_sincronizacao" class="admin-label">Status Sincronização</label>
+                <select name="filtro_sincronizacao" id="filtro_sincronizacao" class="admin-input w-full">
+                    <option value="todas" {% if current_filtro_sincronizacao == 'todas' %}selected{% endif %}>Todas</option>
+                    <option value="habilitada" {% if current_filtro_sincronizacao == 'habilitada' %}selected{% endif %}>Habilitada</option>
+                    <option value="desabilitada" {% if current_filtro_sincronizacao == 'desabilitada' %}selected{% endif %}>Desabilitada</option>
+                </select>
             </div>
             <div class="flex items-end space-x-2">
                 <button type="submit" class="admin-btn-primary whitespace-nowrap">
@@ -33,6 +41,7 @@
                 </a>
             </div>
         </div>
+        {% csrf_token %} {# Adicionado para ter o token disponível para AlpineJS, embora o form seja GET #}
     </form>
 
     <!-- Tabela de Empresas -->
@@ -43,19 +52,36 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Empresa</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">CNPJ/CGC</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Razão Social</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Sincronizar Fiscaut</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
                 {% for empresa in empresas_list %}
-                    <tr>
+                    <tr x-data="{ habilitada: {{ empresa.habilitada_sincronizacao|yesno:'true,false' }}, codiEmp: {{ empresa.codi_emp }} }">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.codi_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.cgce_emp }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ empresa.razao_emp }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                            <button 
+                                @click="toggleSincronizacao(codiEmp, habilitada)"
+                                :class="{
+                                    'bg-green-500 hover:bg-green-600': habilitada,
+                                    'bg-gray-300 hover:bg-gray-400': !habilitada
+                                }" 
+                                class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                type="button" role="switch" :aria-checked="habilitada.toString()">
+                                <span class="sr-only">Sincronizar empresa</span>
+                                <span 
+                                    :class="{ 'translate-x-6': habilitada, 'translate-x-1': !habilitada }" 
+                                    class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out pointer-events-none ring-0">
+                                </span>
+                            </button>
+                        </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="3" class="px-6 py-10 text-center text-gray-500">
-                            {% if current_filters.codi_emp or current_filters.cgce_emp or current_filters.razao_emp %}
+                        <td colspan="4" class="px-6 py-10 text-center text-gray-500">
+                            {% if current_codi_emp or current_cgce_emp or current_nome_empresa or current_filtro_sincronizacao != 'todas' %}
                                 Nenhuma empresa encontrada com os filtros aplicados.
                             {% else %}
                                 Nenhuma empresa para exibir. Tente aplicar filtros ou verifique a conexão ODBC.
@@ -78,7 +104,8 @@
                     {% else %}
                         registros {{ page_obj.start_index }} a {{ page_obj.end_index }}
                     {% endif %}
-                    de {{ page_obj.paginator.count }}.
+                    de <span x-text="totalRecordsMessage">{{ page_obj.paginator.count }}</span>.
+                    <span x-show="isLoadingToggle" class="ml-2 italic text-xs">(Atualizando...)</span>
                 {% else %}
                      0 registros de 0.
                 {% endif %}
@@ -87,15 +114,16 @@
             {% if page_obj.paginator.num_pages > 1 %}
             <nav aria-label="Paginação de empresas">
                 <ul class="inline-flex items-center -space-x-px">
+                    {% url 'sync_empresas_list' as base_url %}
                     {% if page_obj.has_previous %}
                         <li>
-                            <a href="?page=1&codi_emp={{ current_filters.codi_emp|default:'' }}&cgce_emp={{ current_filters.cgce_emp|default:'' }}&razao_emp={{ current_filters.razao_emp|default:'' }}" class="pagination-item rounded-l-md">
+                            <a href="{{ base_url }}?page=1&codi_emp={{ current_codi_emp|default:'' }}&cgce_emp={{ current_cgce_emp|default:'' }}&razao_emp={{ current_nome_empresa|default:'' }}&filtro_sincronizacao={{ current_filtro_sincronizacao|default:'todas' }}" class="pagination-item rounded-l-md">
                                 <span class="sr-only">Primeira</span>
                                 <i data-feather="chevrons-left" class="w-4 h-4"></i>
                             </a>
                         </li>
                         <li>
-                            <a href="?page={{ page_obj.previous_page_number }}&codi_emp={{ current_filters.codi_emp|default:'' }}&cgce_emp={{ current_filters.cgce_emp|default:'' }}&razao_emp={{ current_filters.razao_emp|default:'' }}" class="pagination-item">
+                            <a href="{{ base_url }}?page={{ page_obj.previous_page_number }}&codi_emp={{ current_codi_emp|default:'' }}&cgce_emp={{ current_cgce_emp|default:'' }}&razao_emp={{ current_nome_empresa|default:'' }}&filtro_sincronizacao={{ current_filtro_sincronizacao|default:'todas' }}" class="pagination-item">
                                 <span class="sr-only">Anterior</span>
                                 <i data-feather="chevron-left" class="w-4 h-4"></i>
                             </a>
@@ -122,7 +150,7 @@
                             </li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                             <li>
-                                <a href="?page={{ num }}&codi_emp={{ current_filters.codi_emp|default:'' }}&cgce_emp={{ current_filters.cgce_emp|default:'' }}&razao_emp={{ current_filters.razao_emp|default:'' }}" class="pagination-item">{{ num }}</a>
+                                <a href="{{ base_url }}?page={{ num }}&codi_emp={{ current_codi_emp|default:'' }}&cgce_emp={{ current_cgce_emp|default:'' }}&razao_emp={{ current_nome_empresa|default:'' }}&filtro_sincronizacao={{ current_filtro_sincronizacao|default:'todas' }}" class="pagination-item">{{ num }}</a>
                             </li>
                         {% elif num == page_obj.number|add:'-3' or num == page_obj.number|add:'3' %}
                             <li><span class="pagination-item-disabled">...</span></li>
@@ -131,13 +159,13 @@
 
                     {% if page_obj.has_next %}
                         <li>
-                            <a href="?page={{ page_obj.next_page_number }}&codi_emp={{ current_filters.codi_emp|default:'' }}&cgce_emp={{ current_filters.cgce_emp|default:'' }}&razao_emp={{ current_filters.razao_emp|default:'' }}" class="pagination-item">
+                            <a href="{{ base_url }}?page={{ page_obj.next_page_number }}&codi_emp={{ current_codi_emp|default:'' }}&cgce_emp={{ current_cgce_emp|default:'' }}&razao_emp={{ current_nome_empresa|default:'' }}&filtro_sincronizacao={{ current_filtro_sincronizacao|default:'todas' }}" class="pagination-item">
                                 <span class="sr-only">Próxima</span>
                                 <i data-feather="chevron-right" class="w-4 h-4"></i>
                             </a>
                         </li>
                         <li>
-                            <a href="?page={{ page_obj.paginator.num_pages }}&codi_emp={{ current_filters.codi_emp|default:'' }}&cgce_emp={{ current_filters.cgce_emp|default:'' }}&razao_emp={{ current_filters.razao_emp|default:'' }}" class="pagination-item rounded-r-md">
+                            <a href="{{ base_url }}?page={{ page_obj.paginator.num_pages }}&codi_emp={{ current_codi_emp|default:'' }}&cgce_emp={{ current_cgce_emp|default:'' }}&razao_emp={{ current_nome_empresa|default:'' }}&filtro_sincronizacao={{ current_filtro_sincronizacao|default:'todas' }}" class="pagination-item rounded-r-md">
                                 <span class="sr-only">Última</span>
                                 <i data-feather="chevrons-right" class="w-4 h-4"></i>
                             </a>
@@ -164,34 +192,150 @@
         {% endif %}
     </div>
 
-    <!-- Placeholder para mensagens de erro gerais (se houver) -->
-    {% if messages %}
-        <ul class="messages mt-4 space-y-2">
-            {% for message in messages %}
-                <li{% if message.tags %} class="p-3 rounded-md text-sm flex items-center {% if message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}bg-red-50 text-red-700 border border-red-200{% elif message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}bg-green-50 text-green-700 border border-green-200{% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}bg-yellow-50 text-yellow-700 border border-yellow-200{% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}"{% endif %}>
-                    {% if message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}<i data-feather="alert-circle" class="w-5 h-5 mr-2"></i>{% endif %}
-                    {% if message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}<i data-feather="check-circle" class="w-5 h-5 mr-2"></i>{% endif %}
-                    {% if message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}<i data-feather="alert-triangle" class="w-5 h-5 mr-2"></i>{% endif %}
-                    {% if message.level == DEFAULT_MESSAGE_LEVELS.INFO %}<i data-feather="info" class="w-5 h-5 mr-2"></i>{% endif %}
-                    {{ message }}
-                </li>
-            {% endfor %}
-        </ul>
-    {% endif %}
+    <!-- Mensagens -->
+    <div id="message-container" class="fixed top-5 right-5 z-50 space-y-2"></div>
 
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Script para reinicializar os ícones Feather após a renderização do template, se necessário.
-    // Geralmente, o base.html já faz isso, mas se houver conteúdo carregado dinamicamente
-    // ou interações do AlpineJS que adicionem ícones, pode ser útil.
-    document.addEventListener('DOMContentLoaded', (event) => {
-        feather.replace(); // Garante que os ícones sejam renderizados
-    });
+    function empresasPage() {
+        return {
+            isLoadingToggle: false,
+            totalRecordsMessage: "{{ page_obj.paginator.count|default:0 }}", // Inicializa com valor do Django
+            // csrfToken: document.querySelector('[name=csrfmiddlewaretoken]').value, // Pegar o token CSRF
 
-    // Se estiver usando AlpineJS para algo nesta página que adicione ícones dinamicamente,
-    // você pode precisar chamar feather.replace() após essas operações do Alpine.
+            getCsrfToken() {
+                // Tenta pegar de um input. Se não existir, tenta de um cookie (comum em setups com JS puro/Alpine)
+                let tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (tokenInput) return tokenInput.value;
+                
+                // Fallback para cookie se o input não estiver presente
+                // (O Django geralmente define um cookie chamado 'csrftoken')
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    let cookie = cookies[i].trim();
+                    if (cookie.startsWith('csrftoken=')) {
+                        return cookie.substring('csrftoken='.length, cookie.length);
+                    }
+                }
+                return null; // ou levante um erro se o token for sempre esperado
+            },
+
+            toggleSincronizacao(codiEmp, currentStatus) {
+                this.isLoadingToggle = true;
+                const novoStatus = !currentStatus;
+                const csrfToken = this.getCsrfToken();
+
+                if (!csrfToken) {
+                    console.error('CSRF token não encontrado!');
+                    this.showMessage('Erro de segurança. Tente recarregar a página.', 'error');
+                    this.isLoadingToggle = false;
+                    return;
+                }
+
+                fetch(`{% url 'sync_api_toggle_empresa_sincronizacao' %}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ 
+                        codi_emp: codiEmp, 
+                        habilitar: novoStatus 
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Atualiza o estado local do toggle na UI
+                        // Encontra a linha da tabela e atualiza o x-data 'habilitada'
+                        // Isso requer que o Alpine.js possa reavaliar o estado.
+                        // Uma forma é atualizar o `habilitada` no escopo do `<tr>`.
+                        // A maneira como está (passando currentStatus e esperando que o Alpine 
+                        // no `<tr>` reaja) pode não ser suficiente. 
+                        // Vamos tentar atualizar o `habilitada` diretamente no elemento.
+                        const trElement = event.target.closest('tr');
+                        if (trElement && trElement.__x) { // __x é onde o Alpine armazena o contexto
+                            trElement.__x.run(() => {
+                                trElement.__x.scope.habilitada = novoStatus;
+                            });
+                        }
+                        this.showMessage(data.message, 'success');
+                        // Se o filtro atual for 'habilitada' ou 'desabilitada',
+                        // a empresa pode desaparecer/aparecer. Idealmente, recarregaria a lista.
+                        // Por simplicidade, apenas mostramos a mensagem.
+                        // Poderíamos fazer: window.location.reload(); 
+                        // ou uma atualização mais inteligente da lista se tivéssemos IDs nos TRs
+                    } else {
+                        this.showMessage(data.message || 'Erro ao atualizar.', 'error');
+                        // Reverter o toggle visualmente se a API falhar
+                        // (já que o estado local foi alterado otimisticamente antes da chamada)
+                         const trElement = event.target.closest('tr');
+                        if (trElement && trElement.__x) {
+                            trElement.__x.run(() => {
+                                trElement.__x.scope.habilitada = currentStatus; // Reverte
+                            });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    this.showMessage('Erro de comunicação com o servidor.', 'error');
+                    // Reverter visualmente
+                    const trElement = event.target.closest('tr');
+                    if (trElement && trElement.__x) {
+                        trElement.__x.run(() => {
+                            trElement.__x.scope.habilitada = currentStatus; // Reverte
+                        });
+                    }
+                })
+                .finally(() => {
+                    this.isLoadingToggle = false;
+                    feather.replace(); // Re-renderizar ícones feather se necessário (ex: em mensagens)
+                });
+            },
+
+            showMessage(message, type = 'info') {
+                const container = document.getElementById('message-container');
+                const messageId = `message-${Date.now()}`;
+                
+                let bgColor, textColor, borderColor, icon;
+                if (type === 'success') {
+                    bgColor = 'bg-green-50'; textColor = 'text-green-700'; borderColor = 'border-green-200'; icon = 'check-circle';
+                } else if (type === 'error') {
+                    bgColor = 'bg-red-50'; textColor = 'text-red-700'; borderColor = 'border-red-200'; icon = 'alert-circle';
+                } else if (type === 'warning') {
+                    bgColor = 'bg-yellow-50'; textColor = 'text-yellow-700'; borderColor = 'border-yellow-200'; icon = 'alert-triangle';
+                } else {
+                    bgColor = 'bg-blue-50'; textColor = 'text-blue-700'; borderColor = 'border-blue-200'; icon = 'info';
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.id = messageId;
+                messageDiv.className = `p-3 rounded-md text-sm flex items-center shadow-lg ${bgColor} ${textColor} ${borderColor} border`;
+                messageDiv.innerHTML = `
+                    <i data-feather="${icon}" class="w-5 h-5 mr-2"></i>
+                    <span>${message}</span>
+                    <button @click="document.getElementById('${messageId}').remove()" class="ml-auto -mx-1.5 -my-1.5 bg-transparent rounded-lg focus:ring-2 focus:ring-gray-400 p-1.5 hover:bg-gray-200 inline-flex h-8 w-8">
+                        <span class="sr-only">Fechar</span>
+                        <i data-feather="x" class="w-5 h-5"></i>
+                    </button>
+                `;
+                container.appendChild(messageDiv);
+                feather.replace(); // Para renderizar o ícone dentro da nova mensagem
+
+                setTimeout(() => {
+                    const el = document.getElementById(messageId);
+                    if (el) el.remove();
+                }, 5000);
+            }
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', (event) => {
+        feather.replace(); 
+    });
 </script>
 {% endblock %} 
