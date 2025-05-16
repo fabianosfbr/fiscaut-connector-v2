@@ -385,46 +385,52 @@ class EmpresasListView(TemplateView):
         nome_empresa_filter = self.request.GET.get("nome_empresa", None)
         if nome_empresa_filter:
             search_filters["razao_emp"] = nome_empresa_filter
-        
+
         codi_emp_filter = self.request.GET.get("codi_emp", None)
         if codi_emp_filter:
             try:
                 search_filters["codi_emp"] = int(codi_emp_filter)
             except ValueError:
                 messages.error(self.request, "Código da empresa inválido.")
-        
+
         cgce_emp_filter = self.request.GET.get("cgce_emp", None)
         if cgce_emp_filter:
             search_filters["cgce_emp"] = cgce_emp_filter
 
         # Novo filtro para status de sincronização
-        filtro_sincronizacao = self.request.GET.get("filtro_sincronizacao", "todas") # 'todas', 'habilitada', 'desabilitada'
+        filtro_sincronizacao = self.request.GET.get(
+            "filtro_sincronizacao", "todas"
+        )  # 'todas', 'habilitada', 'desabilitada'
         context["current_filtro_sincronizacao"] = filtro_sincronizacao
 
         try:
             # Usar o novo serviço para listar empresas com status de sincronização
-            empresas_result = empresa_sinc_service.list_empresas_com_status_sincronizacao(
-                filters=search_filters,
-                page_number=int(page_number),
-                page_size=self.page_size,
-                filtro_sincronizacao=filtro_sincronizacao
+            empresas_result = (
+                empresa_sinc_service.list_empresas_com_status_sincronizacao(
+                    filters=search_filters,
+                    page_number=int(page_number),
+                    page_size=self.page_size,
+                    filtro_sincronizacao=filtro_sincronizacao,
+                )
             )
 
             if empresas_result.get("success"):
                 empresas_list = empresas_result.get("data", [])
                 total_records = empresas_result.get("total_records", 0)
-                
+
                 # A paginação aqui pode ser um pouco enganosa se o filtro de sincronização
                 # for 'habilitada' ou 'desabilitada', porque o total_records vem do ODBC
                 # antes do filtro em memória. A UI deve estar ciente disso ou
                 # a lógica de paginação precisaria de um retrabalho mais complexo.
-                paginator = Paginator(range(total_records), self.page_size) # Usar um range para o paginator
+                paginator = Paginator(
+                    range(total_records), self.page_size
+                )  # Usar um range para o paginator
                 page_obj = paginator.get_page(page_number)
-                
+
                 # Atribuir os dados da página atual (já filtrados em memória pelo serviço se necessário)
-                context["empresas_list"] = empresas_list 
+                context["empresas_list"] = empresas_list
                 context["page_obj"] = page_obj
-                context["total_records"] = total_records 
+                context["total_records"] = total_records
                 # Adicionar os filtros atuais ao contexto para persistir nos links de paginação/formulário de filtro
                 context["current_filters"] = search_filters
                 context["current_nome_empresa"] = nome_empresa_filter
@@ -444,12 +450,14 @@ class EmpresasListView(TemplateView):
                 )
 
         except Exception as e:
-            messages.error(self.request, f"Erro inesperado ao carregar empresas: {str(e)}")
+            messages.error(
+                self.request, f"Erro inesperado ao carregar empresas: {str(e)}"
+            )
             context["empresas_list"] = []
             context["page_obj"] = None
             context["total_records"] = 0
             logger.exception("Erro inesperado na view EmpresasListView")
-            
+
         context["page_title"] = "Empresas"
         return context
 
@@ -470,35 +478,50 @@ def api_toggle_empresa_sincronizacao(request):
 
         if codi_emp is None or not isinstance(codi_emp, int):
             return JsonResponse(
-                {"success": False, "message": "Parâmetro 'codi_emp' (inteiro) é obrigatório."},
+                {
+                    "success": False,
+                    "message": "Parâmetro 'codi_emp' (inteiro) é obrigatório.",
+                },
                 status=400,
             )
-        
+
         if habilitar is None or not isinstance(habilitar, bool):
             return JsonResponse(
-                {"success": False, "message": "Parâmetro 'habilitar' (booleano) é obrigatório."},
+                {
+                    "success": False,
+                    "message": "Parâmetro 'habilitar' (booleano) é obrigatório.",
+                },
                 status=400,
             )
 
-        logger.info(f"API: Trocando status de sincronização para empresa {codi_emp} para {'habilitada' if habilitar else 'desabilitada'}")
-        
-        empresa_sinc_obj, created = empresa_sinc_service.toggle_sincronizacao_empresa(codi_emp, habilitar)
+        logger.info(
+            f"API: Trocando status de sincronização para empresa {codi_emp} para {'habilitada' if habilitar else 'desabilitada'}"
+        )
 
-        return JsonResponse({
-            "success": True, 
-            "message": f"Sincronização da empresa {codi_emp} {'habilitada' if habilitar else 'desabilitada'} com sucesso.",
-            "codi_emp": empresa_sinc_obj.codi_emp,
-            "habilitada_sincronizacao": empresa_sinc_obj.habilitada_sincronizacao,
-            "created": created
-        })
+        empresa_sinc_obj, created = empresa_sinc_service.toggle_sincronizacao_empresa(
+            codi_emp, habilitar
+        )
+
+        return JsonResponse(
+            {
+                "success": True,
+                "message": f"Sincronização da empresa {codi_emp} {'habilitada' if habilitar else 'desabilitada'} com sucesso.",
+                "codi_emp": empresa_sinc_obj.codi_emp,
+                "habilitada_sincronizacao": empresa_sinc_obj.habilitada_sincronizacao,
+                "created": created,
+            }
+        )
 
     except json.JSONDecodeError:
         logger.warning("API: JSON inválido recebido para toggle_empresa_sincronizacao.")
         return JsonResponse(
-            {"success": False, "message": "JSON inválido no corpo da requisição."}, status=400
+            {"success": False, "message": "JSON inválido no corpo da requisição."},
+            status=400,
         )
     except Exception as e:
-        logger.exception(f"API: Erro não tratado em api_toggle_empresa_sincronizacao para codi_emp {data.get('codi_emp', 'N/A')}")
+        logger.exception(
+            f"API: Erro não tratado em api_toggle_empresa_sincronizacao para codi_emp {data.get('codi_emp', 'N/A')}"
+        )
         return JsonResponse(
             {"success": False, "message": f"Erro inesperado: {str(e)}"}, status=500
         )

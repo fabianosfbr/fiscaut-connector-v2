@@ -5,6 +5,7 @@ from .odbc_connection import ODBCConnectionManager  # Para interagir com list_em
 
 logger = logging.getLogger(__name__)
 
+
 class EmpresaSincronizacaoService:
     """
     Serviço para gerenciar o status de sincronização de empresas com a API Fiscaut.
@@ -13,7 +14,9 @@ class EmpresaSincronizacaoService:
     def __init__(self):
         self.odbc_manager = ODBCConnectionManager()
 
-    def toggle_sincronizacao_empresa(self, codi_emp: int, habilitar: bool) -> Tuple[EmpresaSincronizacao, bool]:
+    def toggle_sincronizacao_empresa(
+        self, codi_emp: int, habilitar: bool
+    ) -> Tuple[EmpresaSincronizacao, bool]:
         """
         Habilita ou desabilita a sincronização para uma empresa específica.
 
@@ -26,8 +29,7 @@ class EmpresaSincronizacaoService:
             indicando se um novo registro foi criado (True) ou um existente foi atualizado (False).
         """
         empresa_sinc, created = EmpresaSincronizacao.objects.update_or_create(
-            codi_emp=codi_emp,
-            defaults={'habilitada_sincronizacao': habilitar}
+            codi_emp=codi_emp, defaults={"habilitada_sincronizacao": habilitar}
         )
         logger.info(
             f"Sincronização para empresa {codi_emp} {'habilitada' if habilitar else 'desabilitada'}. "
@@ -35,7 +37,9 @@ class EmpresaSincronizacaoService:
         )
         return empresa_sinc, created
 
-    def get_status_sincronizacao_empresas(self, codi_emps: List[int]) -> Dict[int, bool]:
+    def get_status_sincronizacao_empresas(
+        self, codi_emps: List[int]
+    ) -> Dict[int, bool]:
         """
         Retorna o status de sincronização para uma lista de códigos de empresa.
 
@@ -45,8 +49,10 @@ class EmpresaSincronizacaoService:
         Returns:
             Dicionário mapeando codi_emp para seu status de sincronização (True se habilitada, False caso contrário).
         """
-        status_map = {emp.codi_emp: emp.habilitada_sincronizacao
-                      for emp in EmpresaSincronizacao.objects.filter(codi_emp__in=codi_emps)}
+        status_map = {
+            emp.codi_emp: emp.habilitada_sincronizacao
+            for emp in EmpresaSincronizacao.objects.filter(codi_emp__in=codi_emps)
+        }
 
         # Para empresas não encontradas em EmpresaSincronizacao, o padrão é False (não habilitada)
         result_map = {cod_emp: status_map.get(cod_emp, False) for cod_emp in codi_emps}
@@ -57,7 +63,9 @@ class EmpresaSincronizacaoService:
         filters: Optional[Dict[str, Any]] = None,
         page_number: int = 1,
         page_size: int = 50,
-        filtro_sincronizacao: Optional[str] = None  # 'todas', 'habilitada', 'desabilitada'
+        filtro_sincronizacao: Optional[
+            str
+        ] = None,  # 'todas', 'habilitada', 'desabilitada'
     ) -> Dict[str, Any]:
         """
         Lista empresas do ODBC e adiciona o status de sincronização do Fiscaut.
@@ -86,37 +94,48 @@ class EmpresaSincronizacaoService:
         # APÓS a consulta paginada ao ODBC. Isso é uma simplificação.
         # Uma solução mais robusta passaria os codi_emps filtrados para a consulta ODBC.
 
-        empresas_odbc_result = self.odbc_manager.list_empresas(filters, page_number, page_size)
+        empresas_odbc_result = self.odbc_manager.list_empresas(
+            filters, page_number, page_size
+        )
 
         if not empresas_odbc_result.get("success"):
             return empresas_odbc_result
 
         empresas_data = empresas_odbc_result.get("data", [])
-        codi_emps_encontrados_odbc = [emp.get('codi_emp') for emp in empresas_data if emp.get('codi_emp') is not None]
+        codi_emps_encontrados_odbc = [
+            emp.get("codi_emp")
+            for emp in empresas_data
+            if emp.get("codi_emp") is not None
+        ]
 
         if not codi_emps_encontrados_odbc:
-            return empresas_odbc_result # Nenhuma empresa do ODBC, retorna como está
+            return empresas_odbc_result  # Nenhuma empresa do ODBC, retorna como está
 
-        status_sincronizacao = self.get_status_sincronizacao_empresas(codi_emps_encontrados_odbc)
+        status_sincronizacao = self.get_status_sincronizacao_empresas(
+            codi_emps_encontrados_odbc
+        )
 
         empresas_enriquecidas_e_filtradas = []
         for emp in empresas_data:
-            cod_emp = emp.get('codi_emp')
+            cod_emp = emp.get("codi_emp")
             if cod_emp is not None:
-                emp['habilitada_sincronizacao'] = status_sincronizacao.get(cod_emp, False)
+                emp["habilitada_sincronizacao"] = status_sincronizacao.get(
+                    cod_emp, False
+                )
 
-                if filtro_sincronizacao and filtro_sincronizacao != 'todas':
-                    sinc_habilitada_desejada = filtro_sincronizacao == 'habilitada'
-                    if emp['habilitada_sincronizacao'] == sinc_habilitada_desejada:
+                if filtro_sincronizacao and filtro_sincronizacao != "todas":
+                    sinc_habilitada_desejada = filtro_sincronizacao == "habilitada"
+                    if emp["habilitada_sincronizacao"] == sinc_habilitada_desejada:
                         empresas_enriquecidas_e_filtradas.append(emp)
                 else:  # 'todas' ou sem filtro de sincronização específico
                     empresas_enriquecidas_e_filtradas.append(emp)
-        
-        empresas_odbc_result['data'] = empresas_enriquecidas_e_filtradas
+
+        empresas_odbc_result["data"] = empresas_enriquecidas_e_filtradas
         # A `total_records` e paginação ainda são as do ODBC antes do filtro em memória.
         # A UI pode mostrar menos itens na página do que `page_size` devido ao filtro em memória.
-            
+
         return empresas_odbc_result
 
+
 # Instância singleton para uso em toda a aplicação (se necessário, ou injetar via Django)
-empresa_sinc_service = EmpresaSincronizacaoService() 
+empresa_sinc_service = EmpresaSincronizacaoService()

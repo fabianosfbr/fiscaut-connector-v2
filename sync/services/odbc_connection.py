@@ -183,28 +183,32 @@ class ODBCConnectionManager:
             if not config:
                 raise ValueError("Não há configuração de conexão ODBC salva ou ativa.")
 
-        dsn = config.get('dsn')
-        uid = config.get('uid')
-        pwd = config.get('pwd')  # A senha pode ser uma string vazia
-        driver = config.get('driver')
+        dsn = config.get("dsn")
+        uid = config.get("uid")
+        pwd = config.get("pwd")  # A senha pode ser uma string vazia
+        driver = config.get("driver")
 
         if not dsn:
-            raise ValueError("DSN (Nome da Fonte de Dados) é obrigatório na configuração ODBC.")
+            raise ValueError(
+                "DSN (Nome da Fonte de Dados) é obrigatório na configuração ODBC."
+            )
 
         parts = []
         if driver:
             # Adicionar chaves {} é uma prática comum para nomes de driver que podem conter espaços.
             parts.append(f"DRIVER={{{driver}}}")
-        
+
         parts.append(f"DSN={dsn}")
-        
+
         # UID e PWD são opcionais na string de conexão dependendo do DSN/Driver.
         # Se estiverem presentes no config (mesmo que string vazia para PWD), devem ser incluídos.
-        if uid is not None: # uid pode ser uma string vazia ou um valor. Se None, não incluir.
+        if (
+            uid is not None
+        ):  # uid pode ser uma string vazia ou um valor. Se None, não incluir.
             parts.append(f"UID={uid}")
-        if pwd is not None: # pwd pode ser uma string vazia. Se None, não incluir.
+        if pwd is not None:  # pwd pode ser uma string vazia. Se None, não incluir.
             parts.append(f"PWD={pwd}")
-            
+
         return ";".join(parts)
 
     def connect(self, config: Dict[str, str] = None) -> pyodbc.Connection:
@@ -497,7 +501,9 @@ class ODBCConnectionManager:
 
         cnxn = None
         try:
-            logger.debug(f"Tentando conectar via ODBC para list_empresas com string: {conn_str[:conn_str.find('PWD=') if 'PWD=' in conn_str else len(conn_str)]}...") # Log sem senha
+            logger.debug(
+                f"Tentando conectar via ODBC para list_empresas com string: {conn_str[:conn_str.find('PWD=') if 'PWD=' in conn_str else len(conn_str)]}..."
+            )  # Log sem senha
             cnxn = pyodbc.connect(conn_str, timeout=self.DEFAULT_TIMEOUT)
             logger.info(
                 f"Conexão ODBC estabelecida com sucesso para list_empresas (DSN: {dsn})."

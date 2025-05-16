@@ -63,12 +63,16 @@ class EmpresaSincronizacao(models.Model):
         _("Código da Empresa no ODBC"),
         unique=True,
         db_index=True,
-        help_text=_("Identificador único da empresa no sistema ODBC (ex: geempre.codi_emp)"),
+        help_text=_(
+            "Identificador único da empresa no sistema ODBC (ex: geempre.codi_emp)"
+        ),
     )
     habilitada_sincronizacao = models.BooleanField(
         _("Sincronização Habilitada"),
         default=False,
-        help_text=_("Indica se a sincronização desta empresa com o Fiscaut está ativa."),
+        help_text=_(
+            "Indica se a sincronização desta empresa com o Fiscaut está ativa."
+        ),
     )
     created_at = models.DateTimeField(_("Criado em"), auto_now_add=True)
     updated_at = models.DateTimeField(_("Atualizado em"), auto_now=True)

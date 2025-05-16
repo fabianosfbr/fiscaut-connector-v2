@@ -19,8 +19,8 @@ urlpatterns = [
     path("empresas/", views.EmpresasListView.as_view(), name="sync_empresas_list"),
     # Adicionar outras URLs do app sync aqui conforme necessário
     path(
-        "api/odbc/empresas/toggle-sync/", 
-        views.api_toggle_empresa_sincronizacao, 
-        name="sync_api_toggle_empresa_sincronizacao"
+        "api/odbc/empresas/toggle-sync/",
+        views.api_toggle_empresa_sincronizacao,
+        name="sync_api_toggle_empresa_sincronizacao",
     ),
 ]
