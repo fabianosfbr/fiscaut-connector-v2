@@ -198,6 +198,88 @@
                 </div>
             </div>
         </div>
+
+        <!-- Configurações da API Fiscaut -->
+        <div class="mb-6 admin-card" x-data="fiscautApiSettings()">
+            <h3 class="mb-6 text-lg font-semibold text-gray-900">Configuração da API Fiscaut</h3>
+            
+            <!-- Notificação -->
+            <div x-show="showNotification" x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform scale-90"
+                 x-transition:enter-end="opacity-100 transform scale-100"
+                 x-transition:leave="transition ease-in duration-300"
+                 x-transition:leave-start="opacity-100 transform scale-100"
+                 x-transition:leave-end="opacity-0 transform scale-90"
+                 class="flex items-center p-4 mb-4 rounded-lg"
+                 :class="{
+                    'bg-green-50 text-green-700': notificationType === 'success',
+                    'bg-red-50 text-red-700': notificationType === 'error',
+                    'bg-blue-50 text-blue-700': notificationType === 'info'
+                 }">
+                <i :data-feather="notificationType === 'success' ? 'check-circle' : (notificationType === 'error' ? 'alert-circle' : 'info')" class="w-5 h-5 mr-2"></i>
+                <span x-text="notificationMessage"></span>
+                <button @click="showNotification = false" class="ml-auto hover:text-gray-900"
+                        :class="{
+                            'text-green-700': notificationType === 'success',
+                            'text-red-700': notificationType === 'error',
+                            'text-blue-700': notificationType === 'info'
+                        }">
+                    <i data-feather="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            
+            <form class="space-y-4" @submit.prevent="saveFiscautConfig">
+                <div>
+                    <label for="fiscaut_api_url" class="admin-label">URL da API Fiscaut</label>
+                    <input type="url" id="fiscaut_api_url" class="admin-input" x-model="fiscautConfig.apiUrl" 
+                           placeholder="Ex: https://api.fiscaut.com.br/v1" required>
+                </div>
+                
+                <div>
+                    <label for="fiscaut_api_key" class="admin-label">Chave da API Fiscaut</label>
+                    <div class="relative">
+                        <input :type="showFiscautApiKey ? 'text' : 'password'" id="fiscaut_api_key" class="pr-10 admin-input" 
+                               x-model="fiscautConfig.apiKey" required>
+                        <button type="button" @click="showFiscautApiKey = !showFiscautApiKey" 
+                                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700">
+                            <i :data-feather="showFiscautApiKey ? 'eye-off' : 'eye'" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                                
+                <div class="flex flex-wrap gap-3 pt-4">
+                    <button type="submit" class="admin-btn-primary" 
+                            :disabled="isSavingFiscaut || !fiscautConfig.apiUrl.trim() || !fiscautConfig.apiKey.trim()"
+                            :class="{'opacity-60 cursor-not-allowed': isSavingFiscaut || !fiscautConfig.apiUrl.trim() || !fiscautConfig.apiKey.trim()}">
+                        <template x-if="!isSavingFiscaut">
+                            <i data-feather="save" class="w-4 h-4"></i>
+                        </template>
+                        <template x-if="isSavingFiscaut">
+                            <svg class="w-4 h-4 mr-2 -ml-1 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </template>
+                        <span x-text="isSavingFiscaut ? 'Salvando...' : 'Salvar Config. API'"></span>
+                    </button>
+                    
+                    <button type="button" @click="testFiscautConnection" class="admin-btn-secondary" 
+                            :disabled="isTestingFiscaut || !fiscautConfig.apiUrl.trim() || !fiscautConfig.apiKey.trim()"
+                            :class="{'opacity-60 cursor-not-allowed': isTestingFiscaut || !fiscautConfig.apiUrl.trim() || !fiscautConfig.apiKey.trim()}">
+                        <template x-if="!isTestingFiscaut">
+                            <i data-feather="activity" class="w-4 h-4"></i>
+                        </template>
+                        <template x-if="isTestingFiscaut">
+                            <svg class="w-4 h-4 mr-2 -ml-1 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </template>
+                        <span x-text="isTestingFiscaut ? 'Testando...' : 'Testar Conexão API'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
         
         <!-- Integrações -->
         <div class="admin-card" x-data="integrations()">
@@ -555,7 +637,7 @@
                 return cookieValue || '';
             }
         }));
-        
+
         // Integrações
         Alpine.data('integrations', () => ({
             integrations: {
@@ -683,6 +765,162 @@
                 } finally {
                     this.isCleaning = false;
                     feather.replace();
+                }
+            }
+        }));
+
+        // Configurações da API Fiscaut
+        Alpine.data('fiscautApiSettings', () => ({
+            fiscautConfig: {
+                apiUrl: '',
+                apiKey: ''
+            },
+            showFiscautApiKey: false,
+            isSavingFiscaut: false,
+            isTestingFiscaut: false,
+            showNotification: false,
+            notificationMessage: '',
+            notificationType: 'info', // success, error, info
+
+            init() {
+                this.loadFiscautConfig();
+                this.$nextTick(() => { feather.replace() }); 
+            },
+
+            displayNotification(message, type = 'info', duration = 5000) {
+                this.notificationMessage = message;
+                this.notificationType = type;
+                this.showNotification = true;
+                this.$nextTick(() => { feather.replace() });
+                if (duration) {
+                    setTimeout(() => {
+                        this.showNotification = false;
+                    }, duration);
+                }
+            },
+
+            getCsrfToken() {
+                let tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (tokenInput) return tokenInput.value;
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    let cookie = cookies[i].trim();
+                    if (cookie.startsWith('csrftoken=')) {
+                        return cookie.substring('csrftoken='.length, cookie.length);
+                    }
+                }
+                return null; 
+            },
+
+            async loadFiscautConfig() {
+                try {
+                    const response = await fetch('{% url "sync_api_manage_fiscaut_config" %}', {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRFToken': this.getCsrfToken()
+                        }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            this.fiscautConfig.apiUrl = data.api_url || '';
+                            this.fiscautConfig.apiKey = data.api_key || ''; 
+                        } else if (response.status !== 404) { 
+                            this.displayNotification(data.message || 'Erro ao carregar configuração da API Fiscaut.', 'error');
+                        }
+                    } else if (response.status !== 404) {
+                         this.displayNotification(`Erro ao carregar configuração: ${response.statusText}`, 'error');
+                    }
+                } catch (error) {
+                    console.error("Erro ao carregar config Fiscaut:", error);
+                    this.displayNotification('Falha ao conectar com o servidor para carregar configuração.', 'error');
+                }
+            },
+
+            validateFiscautConfig(forTest = false) {
+                if (!this.fiscautConfig.apiUrl.trim() || !this.fiscautConfig.apiKey.trim()) {
+                    const message = forTest ?
+                        'URL da API e Chave da API são obrigatórias para testar.' :
+                        'URL da API e Chave da API são obrigatórias.';
+                    this.displayNotification(message, 'error');
+                    return false;
+                }
+                return true;
+            },
+
+            async saveFiscautConfig() {
+                if (!this.validateFiscautConfig()) {
+                    return;
+                }
+                this.isSavingFiscaut = true;
+                this.showNotification = false; 
+
+                const payload = {
+                    apiUrl: this.fiscautConfig.apiUrl.trim(),
+                    apiKey: this.fiscautConfig.apiKey.trim()
+                };
+
+                try {
+                    const response = await fetch('{% url "sync_api_manage_fiscaut_config" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCsrfToken(),
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.displayNotification(data.message || 'Configuração salva com sucesso!', 'success');
+                        if(data.api_url) this.fiscautConfig.apiUrl = data.api_url;
+                    } else {
+                        this.displayNotification(data.message || 'Erro ao salvar configuração.', 'error');
+                    }
+                } catch (error) {
+                    console.error("Erro ao salvar config Fiscaut:", error);
+                    this.displayNotification('Falha ao conectar com o servidor para salvar configuração.', 'error');
+                } finally {
+                    this.isSavingFiscaut = false;
+                }
+            },
+
+            async testFiscautConnection() {
+                if (!this.validateFiscautConfig(true)) {
+                    return;
+                }
+                this.isTestingFiscaut = true;
+                this.showNotification = false;
+
+                try {
+                    const response = await fetch('{% url "sync_api_test_fiscaut_config" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCsrfToken(),
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(this.fiscautConfig)
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        this.displayNotification(data.message || 'Conexão bem-sucedida!', 'success');
+                    } else {
+                        let errorMessage = data.message || 'Falha no teste de conexão.';
+                        if (data.details && typeof data.details === 'string') {
+                            errorMessage += ` Detalhes: ${data.details}`;
+                        } else if (data.details && data.details.message) {
+                            errorMessage += ` Detalhes: ${data.details.message}`;
+                        }
+                        this.displayNotification(errorMessage, 'error');
+                    }
+                } catch (error) {
+                    console.error("Erro ao testar conexão Fiscaut:", error);
+                    this.displayNotification('Falha ao conectar com o servidor para testar conexão.', 'error');
+                } finally {
+                    this.isTestingFiscaut = false;
                 }
             }
         }));

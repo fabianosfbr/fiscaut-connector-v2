@@ -12,6 +12,8 @@ from django.core.paginator import Paginator
 from django.contrib import messages
 from django.views import View
 from django.shortcuts import redirect
+from .models import FiscautApiConfig # Importar o novo modelo
+import requests # Adicionar importação para a biblioteca requests
 
 logger = logging.getLogger(__name__)
 
@@ -715,3 +717,141 @@ def api_toggle_empresa_sincronizacao(request):
         return JsonResponse(
             {"success": False, "message": f"Erro inesperado: {str(e)}"}, status=500
         )
+
+
+@require_http_methods(["GET", "POST"])
+def api_manage_fiscaut_config(request):
+    """Gerencia a configuração da API Fiscaut."""
+    if request.method == "GET":
+        config = FiscautApiConfig.get_active_config()
+        if config:
+            return JsonResponse({
+                "success": True, 
+                "api_url": config.api_url,
+                "api_key": config.api_key # Lembre-se de que a chave está em texto plano
+            })
+        else:
+            return JsonResponse({"success": True, "api_url": "", "api_key": ""}, status=200) # Ou 404 se preferir que não encontrado seja um erro
+
+    elif request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            api_url = data.get("apiUrl")
+            api_key = data.get("apiKey")
+
+            if not api_url or not api_key:
+                return JsonResponse({"success": False, "message": "URL da API e Chave da API são obrigatórias."}, status=400)
+            
+            # Validação simples de URL (pode ser mais robusta)
+            if not api_url.startswith('http://') and not api_url.startswith('https://'):
+                return JsonResponse({"success": False, "message": "URL da API inválida."}, status=400)
+
+            config, created = FiscautApiConfig.objects.update_or_create(
+                # Como queremos uma única config, podemos usar um ID fixo se soubermos que é sempre 1,
+                # ou buscar o primeiro objeto e atualizar seus campos, ou criar se não existir.
+                # Para update_or_create, precisamos de um campo para buscar. Se não há um, ele sempre cria.
+                # Vamos usar a estratégia de pegar o primeiro ou criar.
+                defaults={'api_url': api_url, 'api_key': api_key}
+            )
+            # A lógica acima em update_or_create pode não funcionar como esperado sem um lookup field.
+            # Simplificando: pegar o primeiro, atualizar. Se não existir, criar.
+            existing_config = FiscautApiConfig.objects.first()
+            if existing_config:
+                existing_config.api_url = api_url
+                existing_config.api_key = api_key
+                existing_config.save()
+                logger.info(f"Configuração da API Fiscaut atualizada: URL={api_url}")
+            else:
+                FiscautApiConfig.objects.create(api_url=api_url, api_key=api_key)
+                logger.info(f"Configuração da API Fiscaut criada: URL={api_url}")
+
+            return JsonResponse({"success": True, "message": "Configuração da API Fiscaut salva com sucesso!", "api_url": api_url})
+        except json.JSONDecodeError:
+            logger.warning("JSON inválido recebido para salvar config Fiscaut")
+            return JsonResponse({"success": False, "message": "JSON inválido."}, status=400)
+        except Exception as e:
+            logger.error(f"Erro ao salvar configuração da API Fiscaut: {str(e)}", exc_info=True)
+            return JsonResponse({"success": False, "message": f"Erro interno do servidor: {str(e)}"}, status=500)
+
+@require_http_methods(["POST"])
+def api_test_fiscaut_config(request):
+    """Testa a conexão com a API Fiscaut fazendo uma chamada real."""
+    try:
+        data = json.loads(request.body)
+        api_url = data.get("apiUrl")
+        api_key = data.get("apiKey")
+
+        if not api_url or not api_key:
+            return JsonResponse({"success": False, "message": "URL da API e Chave da API são obrigatórias para o teste."}, status=400)
+
+        logger.info(f"Testando conexão real com a API Fiscaut: URL={api_url}, Endpoint: /up")
+        
+        test_endpoint_url = api_url.rstrip('/') + "/up" # Alterado para /up
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json", # Adicionado
+            "Accept": "application/json"      # Adicionado
+        }
+        
+        timeout_seconds = 15 # Aumentado ligeiramente, conforme FiscautApiService
+
+        try:
+            response = requests.get(test_endpoint_url, headers=headers, timeout=timeout_seconds)
+            
+            if response.status_code == 200:
+                try:
+                    response_data = response.json()
+                    # Verifica se a API retornou sucesso e um status True específico da Fiscaut API
+                    if response_data.get("status") is True:
+                        logger.info(f"Teste de conexão com API Fiscaut bem-sucedido. Resposta: {response_data}")
+                        return JsonResponse({"success": True, "message": "Conexão com a API Fiscaut bem-sucedida!"})
+                    else:
+                        logger.warning(f"API Fiscaut respondeu, mas indicou um problema. Status: {response.status_code}, Resposta: {response_data}")
+                        return JsonResponse({
+                            "success": False, 
+                            "message": "API Fiscaut respondeu, mas indicou um problema.", 
+                            "details": response_data
+                        }, status=200)
+                except ValueError: # Se a resposta não for JSON
+                    logger.warning(f"Resposta da API Fiscaut não é JSON válido. Status: {response.status_code}, Resposta: {response.text[:200]}")
+                    return JsonResponse({
+                        "success": False, 
+                        "message": "Resposta da API Fiscaut não é um JSON válido.", 
+                        "details": response.text
+                    }, status=200)
+            else: # Outros códigos de status (401, 403, 404, 500, etc.)
+                error_message = f"Falha no teste de conexão com a API Fiscaut. Status: {response.status_code}"
+                details = response.text # Detalhes como texto cru
+                try:
+                    # Tenta obter mais detalhes do corpo da resposta, se for JSON (algumas APIs retornam JSON para erros)
+                    error_details_json = response.json()
+                    error_message += f" - Detalhes JSON: {json.dumps(error_details_json)}"
+                    details = error_details_json # Usa o JSON como detalhe se disponível
+                except ValueError:
+                    error_message += f" - Resposta (texto): {response.text[:200]}..."
+                
+                logger.warning(error_message)
+                return JsonResponse({
+                    "success": False, 
+                    "message": f"Falha na conexão com a API Fiscaut (HTTP {response.status_code}).", 
+                    "details": details
+                }, status=200)
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout ao tentar conectar à API Fiscaut: {test_endpoint_url}")
+            return JsonResponse({"success": False, "message": "Tempo limite excedido ao tentar conectar à API Fiscaut."}, status=200)
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Erro de conexão ao tentar acessar API Fiscaut ({test_endpoint_url}): {str(e)}")
+            return JsonResponse({"success": False, "message": "Erro de conexão: Não foi possível conectar à URL da API Fiscaut fornecida.", "details": str(e)}, status=200)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro de requisição geral ao testar API Fiscaut ({test_endpoint_url}): {str(e)}")
+            return JsonResponse({"success": False, "message": "Erro na requisição à API Fiscaut.", "details": str(e)}, status=200)
+
+    except json.JSONDecodeError:
+        logger.warning("JSON inválido recebido no corpo da requisição para testar config Fiscaut")
+        return JsonResponse({"success": False, "message": "JSON inválido no corpo da requisição."}, status=400)
+    except Exception as e:
+        logger.error(f"Erro não tratado ao testar conexão com API Fiscaut: {str(e)}", exc_info=True)
+        return JsonResponse({"success": False, "message": f"Erro interno do servidor: {str(e)}"}, status=500)
+

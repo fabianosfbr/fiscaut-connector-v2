@@ -28,4 +28,15 @@ urlpatterns = [
         views.EmpresaDetailView.as_view(),
         name="sync_empresa_detalhes",
     ),
+    # APIs para configuração da Fiscaut API
+    path(
+        "api/fiscaut/config/",
+        views.api_manage_fiscaut_config,
+        name="sync_api_manage_fiscaut_config",
+    ),
+    path(
+        "api/fiscaut/test_connection/",
+        views.api_test_fiscaut_config,
+        name="sync_api_test_fiscaut_config",
+    ),
 ]
