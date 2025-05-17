@@ -15,7 +15,7 @@
             <!-- O título principal da página já está no block page_title -->
             <!-- O subtítulo com CNPJ está no block page_subtitle -->
         </div>
-        <a href="{% url 'sync_empresas_list' %}" class="admin-btn-secondary whitespace-nowrap">
+        <a href="{% url 'sync_empresas_list' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-3 rounded-lg shadow-sm flex items-center whitespace-nowrap">
             <i data-feather="arrow-left" class="w-4 h-4 mr-2"></i>Voltar para Lista
         </a>
     </div>
@@ -29,10 +29,10 @@
             </div>
             <button @click="toggleSincronizacaoDetalhes()"
                     :class="{
-                        'admin-btn-success': habilitada,
-                        'admin-btn-danger': !habilitada
+                        'bg-green-600 hover:bg-green-700 text-white': habilitada,
+                        'bg-red-600 hover:bg-red-700 text-white': !habilitada
                     }"
-                    class="whitespace-nowrap flex items-center">
+                    class="font-medium py-2 px-4 rounded-md shadow-sm whitespace-nowrap flex items-center">
                 <i :data-feather="habilitada ? 'check-circle' : 'slash'" class="w-4 h-4 mr-2"></i>
                 <span x-text="habilitada ? 'Sincronização Ativa' : 'Sincronização Inativa'"></span>
                 <span x-show="isLoadingToggle" class="ml-2"><i data-feather="loader" class="animate-spin w-4 h-4"></i></span>
@@ -101,10 +101,10 @@
                     </select>
                 </div>
                 <div class="lg:col-span-4 flex space-x-2 justify-end">
-                    <button type="submit" class="admin-btn-primary w-full md:w-auto">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
                         <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
                     </button>
-                    <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}" class="admin-btn-secondary w-full md:w-auto">
+                    <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
                         <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
                     </a>
                 </div>
@@ -153,19 +153,20 @@
                                             data-nome-for="{{ fornecedor.nome_for|escapejs }}"
                                             data-cgce-for="{{ fornecedor.cgce_for|default:'' }}"
                                             data-codi-cta="{{ fornecedor.codi_cta|default:'' }}"
-                                            class="admin-btn-icon sync-fornecedor-btn"
+                                            class="sync-fornecedor-btn admin-btn text-sm flex items-center justify-center px-3 py-1.5 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
                                             :class="{
-                                                'admin-btn-success': '{{ fornecedor.status_sincronizacao_raw }}' === 'SINCRONIZADO',
-                                                'admin-btn-warning': '{{ fornecedor.status_sincronizacao_raw }}' === 'ERRO', 
-                                                'admin-btn-primary': '{{ fornecedor.status_sincronizacao_raw }}' === 'NAO_SINCRONIZADO' || !'{{ fornecedor.status_sincronizacao_raw }}'
+                                                'bg-red-300': '{{ fornecedor.status_sincronizacao_raw }}' === 'SINCRONIZADO',
+                                                'bg-red-300': '{{ fornecedor.status_sincronizacao_raw }}' === 'ERRO', 
+                                                'bg-red-300': '{{ fornecedor.status_sincronizacao_raw }}' === 'NAO_SINCRONIZADO' || !'{{ fornecedor.status_sincronizacao_raw }}'
+                                                
                                             }"
                                             title="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Re-sincronizar este fornecedor{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Tentar sincronizar novamente{% else %}Sincronizar este fornecedor com a API Fiscaut{% endif %}">
                                         
-                                        <i data-feather="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}check-circle{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}alert-triangle{% else %}refresh-cw{% endif %}" class="w-4 h-4"></i>
+                                        <i data-feather="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}check-circle{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}alert-triangle{% else %}refresh-cw{% endif %}" class="w-4 h-4 mr-1.5"></i>
                                         <span class="sync-text">
                                             {% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Sincronizado{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Erro Sinc.{% else %}Sincronizar{% endif %}
                                         </span>
-                                        <i data-feather="loader" class="animate-spin w-4 h-4 ml-2 icon-loading" style="display: none;"></i>
+                                        <i data-feather="loader" class="animate-spin w-4 h-4 ml-1.5 icon-loading" style="display: none;"></i>
                                     </button>
                                 </td>
                             </tr>
@@ -435,6 +436,19 @@
                     // syncTextSpan.textContent = originalButtonText; // Não restaurar se sucesso e atualizamos
                     if (!responseData || !responseData.success) { // Restaurar texto original apenas se falhou
                          syncTextSpan.textContent = originalButtonText;
+                         // Restaurar classes originais do botão se a API falhou (poderia ser mais granular dependendo do status)
+                         // Esta parte precisa ser ajustada para refletir o estado ANTERIOR ao clique, não apenas "primary"
+                         // TODO: Idealmente, armazenaríamos as classes originais do botão antes do clique
+                         // Por ora, vamos remover as de sucesso e deixar o :class do template lidar com isso no próximo render do Alpine (se houver)
+                         // ou podemos tentar redefinir para um estado padrão (ex: primário)
+                         // button.classList.remove('bg-green-500', 'hover:bg-green-600'); // Linha removida na restauração
+                         // Adicionar de volta a classe azul como padrão, ou a amarela se era erro.
+                         // Isso é complexo de fazer corretamente sem saber o estado anterior exato.
+                         // Por enquanto, a recarga da página ou a reatividade do Alpine via :class é mais segura.
+                         // Se a mensagem de erro for exibida, o usuário sabe que falhou.
+                         // A classe do botão no HTML ainda está vinculada a `fornecedor.status_sincronizacao_raw` que não mudou.
+                         // A atualização visual do botão é otimista. Se falhar, não revertemos explicitamente,
+                         // a menos que a API informe um novo estado de erro que o :class possa usar.
                     }
                     button.disabled = false;
                     this.$nextTick(() => { feather.replace(); });
