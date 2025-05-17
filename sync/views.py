@@ -12,9 +12,14 @@ from django.core.paginator import Paginator
 from django.contrib import messages
 from django.views import View
 from django.shortcuts import redirect
-from .models import FiscautApiConfig, FornecedorStatusSincronizacao # Adicionado FornecedorStatusSincronizacao
-import requests # Adicionar importação para a biblioteca requests
-from .services.fiscaut_api_service import FiscautApiService # Certifique-se que está importado
+from .models import (
+    FiscautApiConfig,
+    FornecedorStatusSincronizacao,
+)  # Adicionado FornecedorStatusSincronizacao
+import requests  # Adicionar importação para a biblioteca requests
+from .services.fiscaut_api_service import (
+    FiscautApiService,
+)  # Certifique-se que está importado
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +189,7 @@ def api_get_odbc_config(request):
             {
                 "success": False,
                 "message": f"Erro ao recuperar configuração ODBC: {str(e)}",
-                "config": {"dsn": "", "uid": "", "pwd": "", "driver": ""}
+                "config": {"dsn": "", "uid": "", "pwd": "", "driver": ""},
             },
             status=500,
         )
@@ -200,7 +205,9 @@ def api_test_odbc_connection(request):
         data = json.loads(request.body)
         use_saved = data.get("use_saved", False)
 
-        config_data_for_service = None # Será None se use_saved=True, ou o dict se use_saved=False
+        config_data_for_service = (
+            None  # Será None se use_saved=True, ou o dict se use_saved=False
+        )
 
         if use_saved:
             logger.info("Teste de conexão ODBC solicitado usando configuração salva.")
@@ -208,7 +215,9 @@ def api_test_odbc_connection(request):
         else:
             dsn = data.get("dsn")
             uid = data.get("uid")
-            pwd_from_form = data.get("pwd") # Pode ser "", "********", ou uma nova senha
+            pwd_from_form = data.get(
+                "pwd"
+            )  # Pode ser "", "********", ou uma nova senha
             driver = data.get("driver", "")
 
             logger.info(
@@ -218,41 +227,75 @@ def api_test_odbc_connection(request):
             # DSN e UID são sempre obrigatórios se não estiver usando a configuração salva.
             if not dsn or not uid:
                 missing_fields = []
-                if not dsn: missing_fields.append("DSN")
-                if not uid: missing_fields.append("UID")
-                
+                if not dsn:
+                    missing_fields.append("DSN")
+                if not uid:
+                    missing_fields.append("UID")
+
                 error_msg = f"Dados incompletos. Campo(s) obrigatório(s) ausente(s): {', '.join(missing_fields)}"
                 logger.warning(error_msg)
-                return JsonResponse({"success": False, "message": error_msg, "missing_fields": missing_fields}, status=400)
-            
-            # Monta o config_data para o serviço. 
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "message": error_msg,
+                        "missing_fields": missing_fields,
+                    },
+                    status=400,
+                )
+
+            # Monta o config_data para o serviço.
             # O serviço decidirá se usa pwd_from_form ou a senha salva se pwd_from_form for vazio/placeholder.
-            config_data_for_service = {"dsn": dsn, "uid": uid, "pwd": pwd_from_form, "driver": driver}
+            config_data_for_service = {
+                "dsn": dsn,
+                "uid": uid,
+                "pwd": pwd_from_form,
+                "driver": driver,
+            }
 
         # Chama o serviço de teste de conexão
         # O serviço test_connection agora precisa lidar com config_data_for_service podendo ter pwd vazio/placeholder
         result = odbc_manager.test_connection(config_data_for_service)
 
         if result.get("success", False):
-            logger.info(f"Teste de conexão ODBC bem-sucedido (use_saved={use_saved}). Detalhes: {result}")
+            logger.info(
+                f"Teste de conexão ODBC bem-sucedido (use_saved={use_saved}). Detalhes: {result}"
+            )
         else:
-            logger.warning(f"Teste de conexão ODBC falhou (use_saved={use_saved}). Erro: {result.get('error', 'Desconhecido')}")
-        
+            logger.warning(
+                f"Teste de conexão ODBC falhou (use_saved={use_saved}). Erro: {result.get('error', 'Desconhecido')}"
+            )
+
         # A view sempre retorna success=True se a chamada à API foi bem-sucedida (sem exceções na view).
         # O resultado real do teste está dentro de result['result'] no frontend ou diretamente em 'result' aqui.
         return JsonResponse({"success": True, "result": result})
 
     except json.JSONDecodeError:
         logger.error("JSON inválido recebido na requisição de teste de conexão ODBC")
-        return JsonResponse({"success": False, "message": "JSON inválido no corpo da requisição.", "error_type": "invalid_json"}, status=400)
-    except ValueError as ve: # Erro de validação vindo do serviço, por exemplo.
+        return JsonResponse(
+            {
+                "success": False,
+                "message": "JSON inválido no corpo da requisição.",
+                "error_type": "invalid_json",
+            },
+            status=400,
+        )
+    except ValueError as ve:  # Erro de validação vindo do serviço, por exemplo.
         logger.error(f"Erro de valor ao testar conexão ODBC: {str(ve)}")
-        return JsonResponse({"success": False, "message": str(ve), "error_type": "value_error"}, status=400)
+        return JsonResponse(
+            {"success": False, "message": str(ve), "error_type": "value_error"},
+            status=400,
+        )
     except Exception as e:
         import traceback
+
         error_traceback = traceback.format_exc()
-        logger.error(f"Erro não tratado ao testar conexão ODBC: {str(e)}\n{error_traceback}")
-        return JsonResponse({"success": False, "message": f"Erro interno no servidor: {str(e)}"}, status=500)
+        logger.error(
+            f"Erro não tratado ao testar conexão ODBC: {str(e)}\n{error_traceback}"
+        )
+        return JsonResponse(
+            {"success": False, "message": f"Erro interno no servidor: {str(e)}"},
+            status=500,
+        )
 
 
 class DashboardView(TemplateView):
@@ -576,7 +619,9 @@ class EmpresaDetailView(View):
         current_f_codi_for = request.GET.get("f_codi_for", None)
         current_f_nome_for = request.GET.get("f_nome_for", None)
         current_f_cgce_for = request.GET.get("f_cgce_for", None)
-        current_f_status_sinc = request.GET.get("f_status_sinc", "todos") # Ler o novo filtro
+        current_f_status_sinc = request.GET.get(
+            "f_status_sinc", "todos"
+        )  # Ler o novo filtro
         f_page_number = request.GET.get("f_page", 1)
         try:
             f_page_number = int(f_page_number)
@@ -601,100 +646,125 @@ class EmpresaDetailView(View):
 
         fornecedores_result = odbc_manager.list_fornecedores_empresa(
             codi_emp=codi_emp,
-            filters=fornecedor_filters, # Filtros que vão para o ODBC
+            filters=fornecedor_filters,  # Filtros que vão para o ODBC
             page_number=f_page_number,
-            page_size=fornecedor_page_size, 
+            page_size=fornecedor_page_size,
         )
 
-        fornecedores_list_com_status = [] # Inicializa a lista final
-        fornecedores_total_records_odbc = 0 # Total de registros retornados pelo ODBC para a página atual
-        fornecedores_total_pages_odbc = 0 # Total de páginas baseado na consulta ODBC original
+        fornecedores_list_com_status = []  # Inicializa a lista final
+        fornecedores_total_records_odbc = (
+            0  # Total de registros retornados pelo ODBC para a página atual
+        )
+        fornecedores_total_pages_odbc = (
+            0  # Total de páginas baseado na consulta ODBC original
+        )
 
         if fornecedores_result.get("error"):
-            messages.error(request, f"Erro ao buscar fornecedores: {fornecedores_result['error']}")
+            messages.error(
+                request, f"Erro ao buscar fornecedores: {fornecedores_result['error']}"
+            )
         else:
             fornecedores_raw_odbc = fornecedores_result.get("data", [])
             # Esses são os totais da consulta ODBC original, ANTES do filtro de status local
-            fornecedores_total_records_odbc = fornecedores_result.get("total_records", 0)
+            fornecedores_total_records_odbc = fornecedores_result.get(
+                "total_records", 0
+            )
             fornecedores_total_pages_odbc = fornecedores_result.get("total_pages", 0)
 
             if fornecedores_raw_odbc:
                 codi_emp_int = int(codi_emp)
-                # Garantir que os códigos de fornecedor sejam strings para a consulta __in e para chaves do mapa
-                codi_for_odbc_list = [str(f['codi_for']) for f in fornecedores_raw_odbc if f.get('codi_for') is not None]
-                logger.info(f"DEBUG_VIEW_DETAIL: Empresa {codi_emp_int} - Lista de codi_for_odbc (strings) para busca de status: {codi_for_odbc_list}")
-                
+                codi_for_odbc_list = [
+                    str(f["codi_for"])
+                    for f in fornecedores_raw_odbc
+                    if f.get("codi_for") is not None
+                ]
+                # logger.info(f"DEBUG_VIEW_DETAIL: Empresa {codi_emp_int} - Lista de codi_for_odbc (strings) para busca de status: {codi_for_odbc_list}")
+
                 status_sinc_map = {}
                 if codi_for_odbc_list:
                     status_objs = FornecedorStatusSincronizacao.objects.filter(
-                        codi_emp_odbc=codi_emp_int,
-                        codi_for_odbc__in=codi_for_odbc_list # Deveria funcionar com lista de strings se o campo do modelo é CharField
+                        codi_emp_odbc=codi_emp_int, codi_for_odbc__in=codi_for_odbc_list
                     )
-                    logger.info(f"DEBUG_VIEW_DETAIL: Objetos de status encontrados no DB ({status_objs.count()}): {list(status_objs.values('codi_emp_odbc', 'codi_for_odbc', 'status_sincronizacao'))}")
+                    # logger.info(f"DEBUG_VIEW_DETAIL: Objetos de status encontrados no DB ({status_objs.count()}): {list(status_objs.values('codi_emp_odbc', 'codi_for_odbc', 'status_sincronizacao'))}")
                     for status_obj in status_objs:
-                        # A chave do mapa DEVE ser string, pois codi_for_odbc no modelo é CharField.
                         status_sinc_map[str(status_obj.codi_for_odbc)] = {
-                            'status': status_obj.get_status_sincronizacao_display(),
-                            'status_raw': status_obj.status_sincronizacao,
-                            'ultima_tentativa': status_obj.ultima_tentativa_sinc,
-                            # 'detalhes_resposta': status_obj.detalhes_ultima_resposta # Omitido para brevidade do log
+                            "status": status_obj.get_status_sincronizacao_display(),
+                            "status_raw": status_obj.status_sincronizacao,
+                            "ultima_tentativa": status_obj.ultima_tentativa_sinc,
                         }
-                logger.info(f"DEBUG_VIEW_DETAIL: Mapa de status construído (status_sinc_map): {status_sinc_map}")
+                # logger.info(f"DEBUG_VIEW_DETAIL: Mapa de status construído (status_sinc_map): {status_sinc_map}")
 
                 temp_list_enriquecida = []
                 for forn in fornecedores_raw_odbc:
-                    codi_for_do_odbc = forn.get('codi_for')
-                    # A chave para buscar no mapa DEVE ser string.
-                    chave_mapa_lookup = str(codi_for_do_odbc) if codi_for_do_odbc is not None else None
-                    
-                    logger.info(f"DEBUG_VIEW_DETAIL: Processando fornecedor do ODBC: original codi_for={codi_for_do_odbc} (tipo: {type(codi_for_do_odbc)}). Usando chave para mapa: '{chave_mapa_lookup}' (tipo: {type(chave_mapa_lookup)})")
-                    
+                    codi_for_do_odbc = forn.get("codi_for")
+                    chave_mapa_lookup = (
+                        str(codi_for_do_odbc) if codi_for_do_odbc is not None else None
+                    )
+
+                    # logger.info(f"DEBUG_VIEW_DETAIL: Processando fornecedor do ODBC: original codi_for={codi_for_do_odbc} (tipo: {type(codi_for_do_odbc)}). Usando chave para mapa: '{chave_mapa_lookup}' (tipo: {type(chave_mapa_lookup)})")
+
                     status_info = status_sinc_map.get(chave_mapa_lookup)
-                    
+
                     if status_info:
-                        logger.info(f"DEBUG_VIEW_DETAIL: Status ENCONTRADO para chave '{chave_mapa_lookup}': {status_info['status_raw']}")
-                        forn['status_sincronizacao'] = status_info['status']
-                        forn['status_sincronizacao_raw'] = status_info['status_raw']
-                        forn['ultima_tentativa_sinc'] = status_info['ultima_tentativa']
+                        # logger.info(f"DEBUG_VIEW_DETAIL: Status ENCONTRADO para chave '{chave_mapa_lookup}': {status_info['status_raw']}")
+                        forn["status_sincronizacao"] = status_info["status"]
+                        forn["status_sincronizacao_raw"] = status_info["status_raw"]
+                        forn["ultima_tentativa_sinc"] = status_info["ultima_tentativa"]
                     else:
-                        logger.info(f"DEBUG_VIEW_DETAIL: Status NÃO ENCONTRADO para chave '{chave_mapa_lookup}'. Definindo como Não Sincronizado.")
-                        forn['status_sincronizacao'] = FornecedorStatusSincronizacao.STATUS_CHOICES[0][1] # "Não Sincronizado"
-                        forn['status_sincronizacao_raw'] = FornecedorStatusSincronizacao.STATUS_CHOICES[0][0] # 'NAO_SINCRONIZADO'
-                        forn['ultima_tentativa_sinc'] = None
+                        # logger.info(f"DEBUG_VIEW_DETAIL: Status NÃO ENCONTRADO para chave '{chave_mapa_lookup}'. Definindo como Não Sincronizado.")
+                        forn["status_sincronizacao"] = (
+                            FornecedorStatusSincronizacao.STATUS_CHOICES[0][1]
+                        )
+                        forn["status_sincronizacao_raw"] = (
+                            FornecedorStatusSincronizacao.STATUS_CHOICES[0][0]
+                        )
+                        forn["ultima_tentativa_sinc"] = None
                     temp_list_enriquecida.append(forn)
-                
+
                 # Aplicar filtro de status de sincronização SE não for "todos"
                 if current_f_status_sinc != "todos":
                     fornecedores_list_com_status = [
-                        f for f in temp_list_enriquecida if f.get('status_sincronizacao_raw') == current_f_status_sinc
+                        f
+                        for f in temp_list_enriquecida
+                        if f.get("status_sincronizacao_raw") == current_f_status_sinc
                     ]
                 else:
                     fornecedores_list_com_status = temp_list_enriquecida
-        
+
         # A paginacao no template ainda será baseada nos totais do ODBC.
         # O número de itens exibidos na PÁGINA ATUAL pode ser menor se o filtro de status for aplicado.
-        # Isso é uma simplificação. Para uma paginação "correta" APÓS o filtro de status, 
+        # Isso é uma simplificação. Para uma paginação "correta" APÓS o filtro de status,
         # precisaríamos buscar TODOS os fornecedores do ODBC, enriquecer TODOS, filtrar TODOS, e DEPOIS paginar a lista filtrada.
 
         fornecedores_paginator = MockPaginator(
-            count=fornecedores_total_records_odbc, # Paginador reflete o total antes do filtro de status local
+            count=fornecedores_total_records_odbc,  # Paginador reflete o total antes do filtro de status local
             num_pages=fornecedores_total_pages_odbc,
-            page_range=range(1, fornecedores_total_pages_odbc + 1 if fornecedores_total_pages_odbc > 0 else 2),
+            page_range=range(
+                1,
+                (
+                    fornecedores_total_pages_odbc + 1
+                    if fornecedores_total_pages_odbc > 0
+                    else 2
+                ),
+            ),
         )
         fornecedores_page_obj = MockPage(
             number=f_page_number,
             paginator_instance=fornecedores_paginator,
-            object_list=fornecedores_list_com_status, # Lista efetivamente exibida (pode ser menor que page_size)
+            object_list=fornecedores_list_com_status,  # Lista efetivamente exibida (pode ser menor que page_size)
             has_next=(f_page_number < fornecedores_total_pages_odbc),
             has_previous=(f_page_number > 1),
             start_index=(
                 ((f_page_number - 1) * fornecedor_page_size + 1)
-                if fornecedores_list_com_status # Baseado no que é exibido
+                if fornecedores_list_com_status  # Baseado no que é exibido
                 else 0
             ),
             end_index=(
-                ((f_page_number - 1) * fornecedor_page_size + len(fornecedores_list_com_status))
-                if fornecedores_list_com_status # Baseado no que é exibido
+                (
+                    (f_page_number - 1) * fornecedor_page_size
+                    + len(fornecedores_list_com_status)
+                )
+                if fornecedores_list_com_status  # Baseado no que é exibido
                 else 0
             ),
         )
@@ -704,7 +774,9 @@ class EmpresaDetailView(View):
         context["current_f_codi_for"] = current_f_codi_for
         context["current_f_nome_for"] = current_f_nome_for
         context["current_f_cgce_for"] = current_f_cgce_for
-        context["current_f_status_sinc"] = current_f_status_sinc # Adicionar ao contexto
+        context["current_f_status_sinc"] = (
+            current_f_status_sinc  # Adicionar ao contexto
+        )
         # --- Fim da Lógica para Fornecedores ---
 
         return render(request, self.template_name, context)
@@ -780,13 +852,17 @@ def api_manage_fiscaut_config(request):
     if request.method == "GET":
         config = FiscautApiConfig.get_active_config()
         if config:
-            return JsonResponse({
-                "success": True, 
-                "api_url": config.api_url,
-                "api_key": config.api_key # Lembre-se de que a chave está em texto plano
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "api_url": config.api_url,
+                    "api_key": config.api_key,  # Lembre-se de que a chave está em texto plano
+                }
+            )
         else:
-            return JsonResponse({"success": True, "api_url": "", "api_key": ""}, status=200) # Ou 404 se preferir que não encontrado seja um erro
+            return JsonResponse(
+                {"success": True, "api_url": "", "api_key": ""}, status=200
+            )  # Ou 404 se preferir que não encontrado seja um erro
 
     elif request.method == "POST":
         try:
@@ -795,18 +871,26 @@ def api_manage_fiscaut_config(request):
             api_key = data.get("apiKey")
 
             if not api_url or not api_key:
-                return JsonResponse({"success": False, "message": "URL da API e Chave da API são obrigatórias."}, status=400)
-            
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "message": "URL da API e Chave da API são obrigatórias.",
+                    },
+                    status=400,
+                )
+
             # Validação simples de URL (pode ser mais robusta)
-            if not api_url.startswith('http://') and not api_url.startswith('https://'):
-                return JsonResponse({"success": False, "message": "URL da API inválida."}, status=400)
+            if not api_url.startswith("http://") and not api_url.startswith("https://"):
+                return JsonResponse(
+                    {"success": False, "message": "URL da API inválida."}, status=400
+                )
 
             config, created = FiscautApiConfig.objects.update_or_create(
                 # Como queremos uma única config, podemos usar um ID fixo se soubermos que é sempre 1,
                 # ou buscar o primeiro objeto e atualizar seus campos, ou criar se não existir.
                 # Para update_or_create, precisamos de um campo para buscar. Se não há um, ele sempre cria.
                 # Vamos usar a estratégia de pegar o primeiro ou criar.
-                defaults={'api_url': api_url, 'api_key': api_key}
+                defaults={"api_url": api_url, "api_key": api_key}
             )
             # A lógica acima em update_or_create pode não funcionar como esperado sem um lookup field.
             # Simplificando: pegar o primeiro, atualizar. Se não existir, criar.
@@ -820,13 +904,27 @@ def api_manage_fiscaut_config(request):
                 FiscautApiConfig.objects.create(api_url=api_url, api_key=api_key)
                 logger.info(f"Configuração da API Fiscaut criada: URL={api_url}")
 
-            return JsonResponse({"success": True, "message": "Configuração da API Fiscaut salva com sucesso!", "api_url": api_url})
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "Configuração da API Fiscaut salva com sucesso!",
+                    "api_url": api_url,
+                }
+            )
         except json.JSONDecodeError:
             logger.warning("JSON inválido recebido para salvar config Fiscaut")
-            return JsonResponse({"success": False, "message": "JSON inválido."}, status=400)
+            return JsonResponse(
+                {"success": False, "message": "JSON inválido."}, status=400
+            )
         except Exception as e:
-            logger.error(f"Erro ao salvar configuração da API Fiscaut: {str(e)}", exc_info=True)
-            return JsonResponse({"success": False, "message": f"Erro interno do servidor: {str(e)}"}, status=500)
+            logger.error(
+                f"Erro ao salvar configuração da API Fiscaut: {str(e)}", exc_info=True
+            )
+            return JsonResponse(
+                {"success": False, "message": f"Erro interno do servidor: {str(e)}"},
+                status=500,
+            )
+
 
 @require_http_methods(["POST"])
 def api_test_fiscaut_config(request):
@@ -837,91 +935,162 @@ def api_test_fiscaut_config(request):
         api_key = data.get("apiKey")
 
         if not api_url or not api_key:
-            return JsonResponse({"success": False, "message": "URL da API e Chave da API são obrigatórias para o teste."}, status=400)
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message": "URL da API e Chave da API são obrigatórias para o teste.",
+                },
+                status=400,
+            )
 
-        logger.info(f"Testando conexão real com a API Fiscaut: URL={api_url}, Endpoint: /up")
-        
-        test_endpoint_url = api_url.rstrip('/') + "/up" # Alterado para /up
+        logger.info(
+            f"Testando conexão real com a API Fiscaut: URL={api_url}, Endpoint: /up"
+        )
+
+        test_endpoint_url = api_url.rstrip("/") + "/up"  # Alterado para /up
 
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json", # Adicionado
-            "Accept": "application/json"      # Adicionado
+            "Content-Type": "application/json",  # Adicionado
+            "Accept": "application/json",  # Adicionado
         }
-        
-        timeout_seconds = 15 # Aumentado ligeiramente, conforme FiscautApiService
+
+        timeout_seconds = 15  # Aumentado ligeiramente, conforme FiscautApiService
 
         try:
-            response = requests.get(test_endpoint_url, headers=headers, timeout=timeout_seconds)
-            
+            response = requests.get(
+                test_endpoint_url, headers=headers, timeout=timeout_seconds
+            )
+
             if response.status_code == 200:
                 try:
                     response_data = response.json()
                     # Verifica se a API retornou sucesso e um status True específico da Fiscaut API
                     if response_data.get("status") is True:
-                        logger.info(f"Teste de conexão com API Fiscaut bem-sucedido. Resposta: {response_data}")
-                        return JsonResponse({"success": True, "message": "Conexão com a API Fiscaut bem-sucedida!"})
+                        logger.info(
+                            f"Teste de conexão com API Fiscaut bem-sucedido. Resposta: {response_data}"
+                        )
+                        return JsonResponse(
+                            {
+                                "success": True,
+                                "message": "Conexão com a API Fiscaut bem-sucedida!",
+                            }
+                        )
                     else:
-                        logger.warning(f"API Fiscaut respondeu, mas indicou um problema. Status: {response.status_code}, Resposta: {response_data}")
-                        return JsonResponse({
-                            "success": False, 
-                            "message": "API Fiscaut respondeu, mas indicou um problema.", 
-                            "details": response_data
-                        }, status=200)
-                except ValueError: # Se a resposta não for JSON
-                    logger.warning(f"Resposta da API Fiscaut não é JSON válido. Status: {response.status_code}, Resposta: {response.text[:200]}")
-                    return JsonResponse({
-                        "success": False, 
-                        "message": "Resposta da API Fiscaut não é um JSON válido.", 
-                        "details": response.text
-                    }, status=200)
-            else: # Outros códigos de status (401, 403, 404, 500, etc.)
+                        logger.warning(
+                            f"API Fiscaut respondeu, mas indicou um problema. Status: {response.status_code}, Resposta: {response_data}"
+                        )
+                        return JsonResponse(
+                            {
+                                "success": False,
+                                "message": "API Fiscaut respondeu, mas indicou um problema.",
+                                "details": response_data,
+                            },
+                            status=200,
+                        )
+                except ValueError:  # Se a resposta não for JSON
+                    logger.warning(
+                        f"Resposta da API Fiscaut não é JSON válido. Status: {response.status_code}, Resposta: {response.text[:200]}"
+                    )
+                    return JsonResponse(
+                        {
+                            "success": False,
+                            "message": "Resposta da API Fiscaut não é um JSON válido.",
+                            "details": response.text,
+                        },
+                        status=200,
+                    )
+            else:  # Outros códigos de status (401, 403, 404, 500, etc.)
                 error_message = f"Falha no teste de conexão com a API Fiscaut. Status: {response.status_code}"
-                details = response.text # Detalhes como texto cru
+                details = response.text  # Detalhes como texto cru
                 try:
                     # Tenta obter mais detalhes do corpo da resposta, se for JSON (algumas APIs retornam JSON para erros)
                     error_details_json = response.json()
-                    error_message += f" - Detalhes JSON: {json.dumps(error_details_json)}"
-                    details = error_details_json # Usa o JSON como detalhe se disponível
+                    error_message += (
+                        f" - Detalhes JSON: {json.dumps(error_details_json)}"
+                    )
+                    details = (
+                        error_details_json  # Usa o JSON como detalhe se disponível
+                    )
                 except ValueError:
                     error_message += f" - Resposta (texto): {response.text[:200]}..."
-                
+
                 logger.warning(error_message)
-                return JsonResponse({
-                    "success": False, 
-                    "message": f"Falha na conexão com a API Fiscaut (HTTP {response.status_code}).", 
-                    "details": details
-                }, status=200)
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "message": f"Falha na conexão com a API Fiscaut (HTTP {response.status_code}).",
+                        "details": details,
+                    },
+                    status=200,
+                )
 
         except requests.exceptions.Timeout:
-            logger.error(f"Timeout ao tentar conectar à API Fiscaut: {test_endpoint_url}")
-            return JsonResponse({"success": False, "message": "Tempo limite excedido ao tentar conectar à API Fiscaut."}, status=200)
+            logger.error(
+                f"Timeout ao tentar conectar à API Fiscaut: {test_endpoint_url}"
+            )
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message": "Tempo limite excedido ao tentar conectar à API Fiscaut.",
+                },
+                status=200,
+            )
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Erro de conexão ao tentar acessar API Fiscaut ({test_endpoint_url}): {str(e)}")
-            return JsonResponse({"success": False, "message": "Erro de conexão: Não foi possível conectar à URL da API Fiscaut fornecida.", "details": str(e)}, status=200)
+            logger.error(
+                f"Erro de conexão ao tentar acessar API Fiscaut ({test_endpoint_url}): {str(e)}"
+            )
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message": "Erro de conexão: Não foi possível conectar à URL da API Fiscaut fornecida.",
+                    "details": str(e),
+                },
+                status=200,
+            )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Erro de requisição geral ao testar API Fiscaut ({test_endpoint_url}): {str(e)}")
-            return JsonResponse({"success": False, "message": "Erro na requisição à API Fiscaut.", "details": str(e)}, status=200)
+            logger.error(
+                f"Erro de requisição geral ao testar API Fiscaut ({test_endpoint_url}): {str(e)}"
+            )
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message": "Erro na requisição à API Fiscaut.",
+                    "details": str(e),
+                },
+                status=200,
+            )
 
     except json.JSONDecodeError:
-        logger.warning("JSON inválido recebido no corpo da requisição para testar config Fiscaut")
-        return JsonResponse({"success": False, "message": "JSON inválido no corpo da requisição."}, status=400)
+        logger.warning(
+            "JSON inválido recebido no corpo da requisição para testar config Fiscaut"
+        )
+        return JsonResponse(
+            {"success": False, "message": "JSON inválido no corpo da requisição."},
+            status=400,
+        )
     except Exception as e:
-        logger.error(f"Erro não tratado ao testar conexão com API Fiscaut: {str(e)}", exc_info=True)
-        return JsonResponse({"success": False, "message": f"Erro interno do servidor: {str(e)}"}, status=500)
+        logger.error(
+            f"Erro não tratado ao testar conexão com API Fiscaut: {str(e)}",
+            exc_info=True,
+        )
+        return JsonResponse(
+            {"success": False, "message": f"Erro interno do servidor: {str(e)}"},
+            status=500,
+        )
 
 
 @require_http_methods(["POST"])
 def api_sincronizar_fornecedor_empresa(request):
     """
-    Endpoint da API para acionar a sincronização de um fornecedor específico 
+    Endpoint da API para acionar a sincronização de um fornecedor específico
     de uma empresa com a API Fiscaut.
     """
     try:
         data = json.loads(request.body)
         cnpj_empresa = data.get("cnpj_empresa")
-        codi_emp_odbc = data.get("codi_emp") # Capturar codi_emp vindo do JS
-        codi_for_odbc = data.get("codi_for") # Capturar codi_for vindo do JS
+        codi_emp_odbc = data.get("codi_emp")  # Capturar codi_emp vindo do JS
+        codi_for_odbc = data.get("codi_for")  # Capturar codi_for vindo do JS
         nome_fornecedor = data.get("nome_fornecedor")
         cnpj_fornecedor = data.get("cnpj_fornecedor")
         conta_contabil_fornecedor = data.get("conta_contabil_fornecedor")
@@ -929,27 +1098,35 @@ def api_sincronizar_fornecedor_empresa(request):
         # Validação básica dos dados recebidos
         required_fields = {
             "cnpj_empresa": cnpj_empresa,
-            "codi_emp_odbc": codi_emp_odbc, # Adicionado à validação
-            "codi_for_odbc": codi_for_odbc, # Adicionado à validação
+            "codi_emp_odbc": codi_emp_odbc,  # Adicionado à validação
+            "codi_for_odbc": codi_for_odbc,  # Adicionado à validação
             "nome_fornecedor": nome_fornecedor,
             "cnpj_fornecedor": cnpj_fornecedor,
         }
         missing_fields = [key for key, value in required_fields.items() if not value]
         if missing_fields:
-            return JsonResponse({
-                "success": False, 
-                "message": f"Campos obrigatórios ausentes: {', '.join(missing_fields)}"
-            }, status=400)
-        
+            return JsonResponse(
+                {
+                    "success": False,
+                    "message": f"Campos obrigatórios ausentes: {', '.join(missing_fields)}",
+                },
+                status=400,
+            )
+
         # Converter codi_emp_odbc para int, se necessário e apropriado
         try:
             codi_emp_odbc = int(codi_emp_odbc)
         except (ValueError, TypeError):
-            return JsonResponse({"success": False, "message": "codi_emp deve ser um inteiro válido."}, status=400)
-        
+            return JsonResponse(
+                {"success": False, "message": "codi_emp deve ser um inteiro válido."},
+                status=400,
+            )
+
         # codi_for_odbc já é string, o que é esperado pelo serviço e modelo
 
-        conta_contabil_fornecedor = conta_contabil_fornecedor if conta_contabil_fornecedor else ''
+        conta_contabil_fornecedor = (
+            conta_contabil_fornecedor if conta_contabil_fornecedor else ""
+        )
 
         logger.info(
             f"API: Req para sinc fornecedor. CNPJ Emp: {cnpj_empresa}, CodiEmp: {codi_emp_odbc}, CodiFor: {codi_for_odbc}, "
@@ -962,13 +1139,15 @@ def api_sincronizar_fornecedor_empresa(request):
             nome_fornecedor=nome_fornecedor,
             cnpj_fornecedor=cnpj_fornecedor,
             conta_contabil_fornecedor=conta_contabil_fornecedor,
-            codi_emp_odbc=codi_emp_odbc, # Passando para o serviço
-            codi_for_odbc=codi_for_odbc  # Passando para o serviço
+            codi_emp_odbc=codi_emp_odbc,  # Passando para o serviço
+            codi_for_odbc=codi_for_odbc,  # Passando para o serviço
         )
 
         # A função sincronizar_fornecedor já retorna um dict com 'success', 'message', etc.
         if resultado_sinc.get("success"):
-            logger.info(f"Sincronização do fornecedor {cnpj_fornecedor} para empresa {cnpj_empresa} bem-sucedida (via API Fiscaut).")
+            logger.info(
+                f"Sincronização do fornecedor {cnpj_fornecedor} para empresa {cnpj_empresa} bem-sucedida (via API Fiscaut)."
+            )
             return JsonResponse(resultado_sinc, status=200)
         else:
             logger.warning(
@@ -977,16 +1156,33 @@ def api_sincronizar_fornecedor_empresa(request):
             )
             # Retorna o status code que veio da chamada ao serviço, se houver, ou 200 (com success:false)
             # ou 500 se for um erro interno do serviço não relacionado à chamada HTTP em si.
-            status_code = resultado_sinc.get("status_code", 200) # Default to 200 if not specified by service error
-            if not isinstance(status_code, int) or status_code < 100 or status_code > 599:
-                 status_code = 500 if resultado_sinc.get("message", "").startswith("Erro interno") else 200
+            status_code = resultado_sinc.get(
+                "status_code", 200
+            )  # Default to 200 if not specified by service error
+            if (
+                not isinstance(status_code, int)
+                or status_code < 100
+                or status_code > 599
+            ):
+                status_code = (
+                    500
+                    if resultado_sinc.get("message", "").startswith("Erro interno")
+                    else 200
+                )
 
             return JsonResponse(resultado_sinc, status=status_code)
 
     except json.JSONDecodeError:
         logger.warning("API sincronizar_fornecedor: JSON inválido recebido.")
-        return JsonResponse({"success": False, "message": "JSON inválido no corpo da requisição."}, status=400)
+        return JsonResponse(
+            {"success": False, "message": "JSON inválido no corpo da requisição."},
+            status=400,
+        )
     except Exception as e:
-        logger.error(f"API sincronizar_fornecedor: Erro não tratado: {str(e)}", exc_info=True)
-        return JsonResponse({"success": False, "message": f"Erro interno no servidor: {str(e)}"}, status=500)
-
+        logger.error(
+            f"API sincronizar_fornecedor: Erro não tratado: {str(e)}", exc_info=True
+        )
+        return JsonResponse(
+            {"success": False, "message": f"Erro interno no servidor: {str(e)}"},
+            status=500,
+        )
