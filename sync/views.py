@@ -12,7 +12,7 @@ from django.core.paginator import Paginator
 from django.contrib import messages
 from django.views import View
 from django.shortcuts import redirect
-from .models import FiscautApiConfig # Importar o novo modelo
+from .models import FiscautApiConfig, FornecedorStatusSincronizacao # Adicionado FornecedorStatusSincronizacao
 import requests # Adicionar importação para a biblioteca requests
 from .services.fiscaut_api_service import FiscautApiService # Certifique-se que está importado
 
@@ -572,10 +572,11 @@ class EmpresaDetailView(View):
         }
 
         # --- Início da Lógica para Fornecedores ---
-        fornecedor_page_size = 50  # Conforme definido no plano
+        fornecedor_page_size = 50
         current_f_codi_for = request.GET.get("f_codi_for", None)
         current_f_nome_for = request.GET.get("f_nome_for", None)
         current_f_cgce_for = request.GET.get("f_cgce_for", None)
+        current_f_status_sinc = request.GET.get("f_status_sinc", "todos") # Ler o novo filtro
         f_page_number = request.GET.get("f_page", 1)
         try:
             f_page_number = int(f_page_number)
@@ -589,68 +590,121 @@ class EmpresaDetailView(View):
             fornecedor_filters["f_codi_for"] = current_f_codi_for
         if current_f_nome_for:
             fornecedor_filters["f_nome_for"] = current_f_nome_for
-        if current_f_cgce_for:  # O serviço ODBC já trata o caso de string vazia
+        if current_f_cgce_for:
             fornecedor_filters["f_cgce_for"] = current_f_cgce_for
+        # Não passamos f_status_sinc para odbc_manager.list_fornecedores_empresa
+        # pois o filtro de status será aplicado após o enriquecimento.
 
         logger.debug(
-            f"Buscando fornecedores para empresa {codi_emp} com filtros: {fornecedor_filters}, página: {f_page_number}"
+            f"Buscando fornecedores para empresa {codi_emp} com filtros ODBC: {fornecedor_filters}, página: {f_page_number}, filtro status sinc: {current_f_status_sinc}"
         )
 
         fornecedores_result = odbc_manager.list_fornecedores_empresa(
             codi_emp=codi_emp,
-            filters=fornecedor_filters,
+            filters=fornecedor_filters, # Filtros que vão para o ODBC
             page_number=f_page_number,
-            page_size=fornecedor_page_size,
+            page_size=fornecedor_page_size, 
         )
 
-        if fornecedores_result.get("error"):
-            messages.error(
-                request,
-                f"Erro ao buscar fornecedores: {fornecedores_result['error']}",
-            )
-            # Mesmo com erro, preparamos uma estrutura vazia para o template não quebrar
-            fornecedores_list = []
-            fornecedores_total_records = 0
-            fornecedores_total_pages = 0
-        else:
-            fornecedores_list = fornecedores_result.get("data", [])
-            fornecedores_total_records = fornecedores_result.get("total_records", 0)
-            fornecedores_total_pages = fornecedores_result.get("total_pages", 0)
+        fornecedores_list_com_status = [] # Inicializa a lista final
+        fornecedores_total_records_odbc = 0 # Total de registros retornados pelo ODBC para a página atual
+        fornecedores_total_pages_odbc = 0 # Total de páginas baseado na consulta ODBC original
 
-        # Criar um objeto Paginator e Page simulado para fornecedores
-        # Isso permite reutilizar a lógica de template de paginação se for similar
+        if fornecedores_result.get("error"):
+            messages.error(request, f"Erro ao buscar fornecedores: {fornecedores_result['error']}")
+        else:
+            fornecedores_raw_odbc = fornecedores_result.get("data", [])
+            # Esses são os totais da consulta ODBC original, ANTES do filtro de status local
+            fornecedores_total_records_odbc = fornecedores_result.get("total_records", 0)
+            fornecedores_total_pages_odbc = fornecedores_result.get("total_pages", 0)
+
+            if fornecedores_raw_odbc:
+                codi_emp_int = int(codi_emp)
+                # Garantir que os códigos de fornecedor sejam strings para a consulta __in e para chaves do mapa
+                codi_for_odbc_list = [str(f['codi_for']) for f in fornecedores_raw_odbc if f.get('codi_for') is not None]
+                logger.info(f"DEBUG_VIEW_DETAIL: Empresa {codi_emp_int} - Lista de codi_for_odbc (strings) para busca de status: {codi_for_odbc_list}")
+                
+                status_sinc_map = {}
+                if codi_for_odbc_list:
+                    status_objs = FornecedorStatusSincronizacao.objects.filter(
+                        codi_emp_odbc=codi_emp_int,
+                        codi_for_odbc__in=codi_for_odbc_list # Deveria funcionar com lista de strings se o campo do modelo é CharField
+                    )
+                    logger.info(f"DEBUG_VIEW_DETAIL: Objetos de status encontrados no DB ({status_objs.count()}): {list(status_objs.values('codi_emp_odbc', 'codi_for_odbc', 'status_sincronizacao'))}")
+                    for status_obj in status_objs:
+                        # A chave do mapa DEVE ser string, pois codi_for_odbc no modelo é CharField.
+                        status_sinc_map[str(status_obj.codi_for_odbc)] = {
+                            'status': status_obj.get_status_sincronizacao_display(),
+                            'status_raw': status_obj.status_sincronizacao,
+                            'ultima_tentativa': status_obj.ultima_tentativa_sinc,
+                            # 'detalhes_resposta': status_obj.detalhes_ultima_resposta # Omitido para brevidade do log
+                        }
+                logger.info(f"DEBUG_VIEW_DETAIL: Mapa de status construído (status_sinc_map): {status_sinc_map}")
+
+                temp_list_enriquecida = []
+                for forn in fornecedores_raw_odbc:
+                    codi_for_do_odbc = forn.get('codi_for')
+                    # A chave para buscar no mapa DEVE ser string.
+                    chave_mapa_lookup = str(codi_for_do_odbc) if codi_for_do_odbc is not None else None
+                    
+                    logger.info(f"DEBUG_VIEW_DETAIL: Processando fornecedor do ODBC: original codi_for={codi_for_do_odbc} (tipo: {type(codi_for_do_odbc)}). Usando chave para mapa: '{chave_mapa_lookup}' (tipo: {type(chave_mapa_lookup)})")
+                    
+                    status_info = status_sinc_map.get(chave_mapa_lookup)
+                    
+                    if status_info:
+                        logger.info(f"DEBUG_VIEW_DETAIL: Status ENCONTRADO para chave '{chave_mapa_lookup}': {status_info['status_raw']}")
+                        forn['status_sincronizacao'] = status_info['status']
+                        forn['status_sincronizacao_raw'] = status_info['status_raw']
+                        forn['ultima_tentativa_sinc'] = status_info['ultima_tentativa']
+                    else:
+                        logger.info(f"DEBUG_VIEW_DETAIL: Status NÃO ENCONTRADO para chave '{chave_mapa_lookup}'. Definindo como Não Sincronizado.")
+                        forn['status_sincronizacao'] = FornecedorStatusSincronizacao.STATUS_CHOICES[0][1] # "Não Sincronizado"
+                        forn['status_sincronizacao_raw'] = FornecedorStatusSincronizacao.STATUS_CHOICES[0][0] # 'NAO_SINCRONIZADO'
+                        forn['ultima_tentativa_sinc'] = None
+                    temp_list_enriquecida.append(forn)
+                
+                # Aplicar filtro de status de sincronização SE não for "todos"
+                if current_f_status_sinc != "todos":
+                    fornecedores_list_com_status = [
+                        f for f in temp_list_enriquecida if f.get('status_sincronizacao_raw') == current_f_status_sinc
+                    ]
+                else:
+                    fornecedores_list_com_status = temp_list_enriquecida
+        
+        # A paginacao no template ainda será baseada nos totais do ODBC.
+        # O número de itens exibidos na PÁGINA ATUAL pode ser menor se o filtro de status for aplicado.
+        # Isso é uma simplificação. Para uma paginação "correta" APÓS o filtro de status, 
+        # precisaríamos buscar TODOS os fornecedores do ODBC, enriquecer TODOS, filtrar TODOS, e DEPOIS paginar a lista filtrada.
+
         fornecedores_paginator = MockPaginator(
-            count=fornecedores_total_records,
-            num_pages=fornecedores_total_pages,
-            page_range=range(1, fornecedores_total_pages + 1),
+            count=fornecedores_total_records_odbc, # Paginador reflete o total antes do filtro de status local
+            num_pages=fornecedores_total_pages_odbc,
+            page_range=range(1, fornecedores_total_pages_odbc + 1 if fornecedores_total_pages_odbc > 0 else 2),
         )
         fornecedores_page_obj = MockPage(
             number=f_page_number,
             paginator_instance=fornecedores_paginator,
-            object_list=fornecedores_list,
-            has_next=(f_page_number < fornecedores_total_pages),
+            object_list=fornecedores_list_com_status, # Lista efetivamente exibida (pode ser menor que page_size)
+            has_next=(f_page_number < fornecedores_total_pages_odbc),
             has_previous=(f_page_number > 1),
             start_index=(
                 ((f_page_number - 1) * fornecedor_page_size + 1)
-                if fornecedores_list
+                if fornecedores_list_com_status # Baseado no que é exibido
                 else 0
             ),
             end_index=(
-                ((f_page_number - 1) * fornecedor_page_size + len(fornecedores_list))
-                if fornecedores_list
+                ((f_page_number - 1) * fornecedor_page_size + len(fornecedores_list_com_status))
+                if fornecedores_list_com_status # Baseado no que é exibido
                 else 0
             ),
         )
 
-        context["fornecedores_list"] = (
-            fornecedores_list  # Lista de fornecedores da página atual
-        )
-        context["fornecedores_page_obj"] = (
-            fornecedores_page_obj  # Objeto de página para paginação
-        )
+        context["fornecedores_list"] = fornecedores_list_com_status
+        context["fornecedores_page_obj"] = fornecedores_page_obj
         context["current_f_codi_for"] = current_f_codi_for
         context["current_f_nome_for"] = current_f_nome_for
         context["current_f_cgce_for"] = current_f_cgce_for
+        context["current_f_status_sinc"] = current_f_status_sinc # Adicionar ao contexto
         # --- Fim da Lógica para Fornecedores ---
 
         return render(request, self.template_name, context)
@@ -866,8 +920,8 @@ def api_sincronizar_fornecedor_empresa(request):
     try:
         data = json.loads(request.body)
         cnpj_empresa = data.get("cnpj_empresa")
-        # codi_emp = data.get("codi_emp") # Código da empresa, pode ser usado para logs ou verificações adicionais
-        # codi_for = data.get("codi_for") # Código do fornecedor, pode ser usado para logs
+        codi_emp_odbc = data.get("codi_emp") # Capturar codi_emp vindo do JS
+        codi_for_odbc = data.get("codi_for") # Capturar codi_for vindo do JS
         nome_fornecedor = data.get("nome_fornecedor")
         cnpj_fornecedor = data.get("cnpj_fornecedor")
         conta_contabil_fornecedor = data.get("conta_contabil_fornecedor")
@@ -875,9 +929,10 @@ def api_sincronizar_fornecedor_empresa(request):
         # Validação básica dos dados recebidos
         required_fields = {
             "cnpj_empresa": cnpj_empresa,
+            "codi_emp_odbc": codi_emp_odbc, # Adicionado à validação
+            "codi_for_odbc": codi_for_odbc, # Adicionado à validação
             "nome_fornecedor": nome_fornecedor,
             "cnpj_fornecedor": cnpj_fornecedor,
-            # conta_contabil_fornecedor pode ser opcional dependendo da API Fiscaut
         }
         missing_fields = [key for key, value in required_fields.items() if not value]
         if missing_fields:
@@ -886,11 +941,18 @@ def api_sincronizar_fornecedor_empresa(request):
                 "message": f"Campos obrigatórios ausentes: {', '.join(missing_fields)}"
             }, status=400)
         
-        # Conta contábil pode ser opcional ou ter um valor padrão se não fornecida
-        conta_contabil_fornecedor = conta_contabil_fornecedor if conta_contabil_fornecedor else '' # Ou None, dependendo do que a API Fiscaut espera
+        # Converter codi_emp_odbc para int, se necessário e apropriado
+        try:
+            codi_emp_odbc = int(codi_emp_odbc)
+        except (ValueError, TypeError):
+            return JsonResponse({"success": False, "message": "codi_emp deve ser um inteiro válido."}, status=400)
+        
+        # codi_for_odbc já é string, o que é esperado pelo serviço e modelo
+
+        conta_contabil_fornecedor = conta_contabil_fornecedor if conta_contabil_fornecedor else ''
 
         logger.info(
-            f"API: Recebida requisição para sincronizar fornecedor. CNPJ Empresa: {cnpj_empresa}, "
+            f"API: Req para sinc fornecedor. CNPJ Emp: {cnpj_empresa}, CodiEmp: {codi_emp_odbc}, CodiFor: {codi_for_odbc}, "
             f"Nome Forn: {nome_fornecedor}, CNPJ Forn: {cnpj_fornecedor}, Conta: {conta_contabil_fornecedor}"
         )
 
@@ -899,7 +961,9 @@ def api_sincronizar_fornecedor_empresa(request):
             cnpj_empresa=cnpj_empresa,
             nome_fornecedor=nome_fornecedor,
             cnpj_fornecedor=cnpj_fornecedor,
-            conta_contabil_fornecedor=conta_contabil_fornecedor
+            conta_contabil_fornecedor=conta_contabil_fornecedor,
+            codi_emp_odbc=codi_emp_odbc, # Passando para o serviço
+            codi_for_odbc=codi_for_odbc  # Passando para o serviço
         )
 
         # A função sincronizar_fornecedor já retorna um dict com 'success', 'message', etc.

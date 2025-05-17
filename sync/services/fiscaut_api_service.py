@@ -4,7 +4,7 @@ Serviço para gerenciar a configuração e comunicação com a API Fiscaut.
 import requests
 import logging
 from typing import Dict, Any, Optional, Tuple
-from sync.models import FiscautApiConfig
+from sync.models import FiscautApiConfig, FornecedorStatusSincronizacao
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -113,21 +113,24 @@ class FiscautApiService:
             logger.error(f"Erro inesperado ao testar API Fiscaut: {e}")
             return {"success": False, "message": f"Ocorreu um erro inesperado durante o teste: {e}"}
 
-    def sincronizar_fornecedor(self, cnpj_empresa: str, nome_fornecedor: str, cnpj_fornecedor: str, conta_contabil_fornecedor: str) -> Dict[str, Any]:
+    def sincronizar_fornecedor(self, cnpj_empresa: str, nome_fornecedor: str, cnpj_fornecedor: str, conta_contabil_fornecedor: str, codi_emp_odbc: int, codi_for_odbc: str) -> Dict[str, Any]:
         """
-        Envia os dados de um fornecedor para a API Fiscaut para sincronização.
+        Envia os dados de um fornecedor para a API Fiscaut para sincronização e registra o status.
 
         Args:
             cnpj_empresa: CNPJ da empresa à qual o fornecedor pertence.
             nome_fornecedor: Nome do fornecedor.
             cnpj_fornecedor: CNPJ do fornecedor.
             conta_contabil_fornecedor: Código da conta contábil do fornecedor.
+            codi_emp_odbc: Código da empresa no sistema ODBC.
+            codi_for_odbc: Código do fornecedor no sistema ODBC.
 
         Returns:
             Um dicionário com o status da operação e dados/mensagens.
         """
         current_config = self.get_config()
         if not current_config:
+            # Não registraremos tentativa aqui, pois é uma falha de pré-condição do sistema
             return {"success": False, "message": "Configuração da API Fiscaut não encontrada. Por favor, configure-a primeiro."}
 
         target_url = current_config.api_url
@@ -151,70 +154,86 @@ class FiscautApiService:
             "Accept": "application/json"
         }
 
-        logger.info(f"Sincronizando fornecedor: CNPJ Empresa={cnpj_empresa}, Fornecedor={cnpj_fornecedor} para endpoint {endpoint}")
-        logger.debug(f"Payload da sincronização do fornecedor: {payload}")
+        logger.info(f"DEBUG_SINC_FORN: Iniciando sincronização para Empresa ODBC {codi_emp_odbc}, Forn ODBC {codi_for_odbc}.")
+        logger.debug(f"DEBUG_SINC_FORN: Payload para API Fiscaut: {payload}")
+
+        response_dict_to_return = {} 
+        sinc_sucesso_api = False
+        detalhes_para_registro = None
 
         try:
-            response = requests.post(endpoint, headers=headers, json=payload, timeout=30) # Timeout de 30s para POST
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=30)
+            detalhes_para_registro = response.text 
 
-            # Se a API retornar 200 OK ou 201 Created, consideramos sucesso parcial (API respondeu)
-            # A lógica de "sucesso total" pode depender do corpo da resposta da API Fiscaut
             if response.status_code == 200 or response.status_code == 201:
                 try:
                     response_data = response.json()
-                    logger.info(f"Resposta da sincronização do fornecedor ({response.status_code}): {response_data}")
-                    # Assumindo que a API Fiscaut pode retornar um "success": false em um 200 OK.
-                    # Adapte esta lógica conforme a API Fiscaut real.
-                    if isinstance(response_data, dict) and response_data.get("success") is False:
-                        return {
-                            "success": False,
-                            "message": response_data.get("message", "API Fiscaut indicou uma falha na sincronização."),
+                    detalhes_para_registro = response_data 
+                    logger.info(f"DEBUG_SINC_FORN: Resposta API Fiscaut ({response.status_code}): {response_data}")
+                    
+                    if isinstance(response_data, dict) and response_data.get("status") is True: 
+                        sinc_sucesso_api = True
+                        response_dict_to_return = {
+                            "success": True, 
+                            "message": response_data.get("message", "Dados do fornecedor processados com sucesso pela API Fiscaut."), 
                             "details": response_data,
                             "status_code": response.status_code
                         }
-                    return {
-                        "success": True, 
-                        "message": "Dados do fornecedor enviados para sincronização com sucesso.", 
-                        "details": response_data,
-                        "status_code": response.status_code
-                    }
-                except ValueError: # Se a resposta não for JSON
+                    else:
+                        sinc_sucesso_api = False 
+                        response_dict_to_return = {
+                            "success": False,
+                            "message": response_data.get("message", "API Fiscaut indicou uma falha na sincronização (lógica interna da API)."),
+                            "details": response_data,
+                            "status_code": response.status_code
+                        }
+                except ValueError: # Resposta não JSON
+                    sinc_sucesso_api = False # Consideramos falha se a resposta esperada era JSON e não foi.
                     logger.warning(f"Resposta da sincronização do fornecedor ({response.status_code}) não é JSON: {response.text[:200]}")
-                    return {
-                        "success": True, # Sucesso na chamada, mas resposta inesperada
+                    response_dict_to_return = {
+                        "success": False, # Ou True, dependendo se um 200 OK com non-JSON é aceitável.
+                                         # Para esta API, vamos assumir que um 200/201 deve retornar JSON.
                         "message": f"Fornecedor enviado, mas a resposta da API não foi JSON (Status: {response.status_code}).",
                         "details": response.text,
                         "status_code": response.status_code
                     }
             else: # Erros HTTP (4xx, 5xx)
+                sinc_sucesso_api = False
                 error_message = f"Falha ao enviar dados do fornecedor para API Fiscaut (HTTP {response.status_code})."
-                details = response.text
                 try:
                     error_details_json = response.json()
+                    detalhes_para_registro = error_details_json
                     error_message_api = error_details_json.get("message", "Erro não especificado pela API.")
                     details_api = error_details_json.get("errors", error_details_json)
                     logger.warning(f"{error_message} Detalhes da API: {details_api}")
-                    return {
-                        "success": False, 
-                        "message": f"API Fiscaut retornou erro {response.status_code}: {error_message_api}",
-                        "details": details_api,
-                        "status_code": response.status_code
-                    }
+                    response_dict_to_return = {"success": False, "message": f"API Fiscaut retornou erro {response.status_code}: {error_message_api}","details": details_api, "status_code": response.status_code}
                 except ValueError:
                     logger.warning(f"{error_message} Resposta: {response.text[:200]}")
-                    return {
-                        "success": False,
-                        "message": error_message,
-                        "details": response.text,
-                        "status_code": response.status_code
-                    }
+                    response_dict_to_return = {"success": False, "message": error_message, "details": response.text, "status_code": response.status_code}
 
         except requests.exceptions.Timeout:
+            sinc_sucesso_api = False
             logger.error(f"Timeout ao enviar dados do fornecedor para API Fiscaut: {endpoint}")
-            return {"success": False, "message": "Tempo limite excedido ao tentar enviar dados para a API Fiscaut."}
+            detalhes_para_registro = "Timeout na requisição"
+            response_dict_to_return = {"success": False, "message": "Tempo limite excedido ao tentar enviar dados para a API Fiscaut."}
         except requests.exceptions.RequestException as e:
+            sinc_sucesso_api = False
             logger.error(f"Erro de requisição ao enviar dados do fornecedor para API Fiscaut: {e}")
-            return {"success": False, "message": f"Erro ao conectar à API Fiscaut para enviar dados: {e}"}
+            detalhes_para_registro = str(e)
+            response_dict_to_return = {"success": False, "message": f"Erro ao conectar à API Fiscaut para enviar dados: {e}"}
         except Exception as e: # Outros erros inesperados
+            sinc_sucesso_api = False
             logger.error(f"Erro inesperado ao enviar dados do fornecedor: {e}", exc_info=True)
-            return {"success": False, "message": f"Ocorreu um erro inesperado ao enviar dados do fornecedor: {e}"} 
+            detalhes_para_registro = str(e)
+            response_dict_to_return = {"success": False, "message": f"Ocorreu um erro inesperado ao enviar dados do fornecedor: {e}"}
+        finally:
+            # Registrar a tentativa de sincronização independentemente do resultado da chamada HTTP,
+            # exceto para falhas de configuração prévia.
+            FornecedorStatusSincronizacao.registrar_sincronizacao(
+                codi_emp_odbc=codi_emp_odbc,
+                codi_for_odbc=codi_for_odbc,
+                sucesso=sinc_sucesso_api, # Sucesso é definido pela API Fiscaut retornando o esperado (ex: status:true)
+                detalhes_resposta=detalhes_para_registro
+            )
+            
+        return response_dict_to_return 
