@@ -111,4 +111,110 @@ class FiscautApiService:
             return {"success": False, "message": f"Erro ao conectar à API Fiscaut: {e}"}
         except Exception as e:
             logger.error(f"Erro inesperado ao testar API Fiscaut: {e}")
-            return {"success": False, "message": f"Ocorreu um erro inesperado durante o teste: {e}"} 
+            return {"success": False, "message": f"Ocorreu um erro inesperado durante o teste: {e}"}
+
+    def sincronizar_fornecedor(self, cnpj_empresa: str, nome_fornecedor: str, cnpj_fornecedor: str, conta_contabil_fornecedor: str) -> Dict[str, Any]:
+        """
+        Envia os dados de um fornecedor para a API Fiscaut para sincronização.
+
+        Args:
+            cnpj_empresa: CNPJ da empresa à qual o fornecedor pertence.
+            nome_fornecedor: Nome do fornecedor.
+            cnpj_fornecedor: CNPJ do fornecedor.
+            conta_contabil_fornecedor: Código da conta contábil do fornecedor.
+
+        Returns:
+            Um dicionário com o status da operação e dados/mensagens.
+        """
+        current_config = self.get_config()
+        if not current_config:
+            return {"success": False, "message": "Configuração da API Fiscaut não encontrada. Por favor, configure-a primeiro."}
+
+        target_url = current_config.api_url
+        target_key = current_config.api_key
+
+        if not target_url or not target_key:
+            return {"success": False, "message": "URL da API ou Chave da API não configuradas."}
+
+        endpoint = f"{target_url.rstrip('/')}/contabil/fornecedores"
+        
+        payload = {
+            "cnpj_empresa": cnpj_empresa,
+            "nome_fornecedor": nome_fornecedor,
+            "cnpj_fornecedor": cnpj_fornecedor,
+            "conta_contabil_fornecedor": conta_contabil_fornecedor,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {target_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
+        logger.info(f"Sincronizando fornecedor: CNPJ Empresa={cnpj_empresa}, Fornecedor={cnpj_fornecedor} para endpoint {endpoint}")
+        logger.debug(f"Payload da sincronização do fornecedor: {payload}")
+
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=30) # Timeout de 30s para POST
+
+            # Se a API retornar 200 OK ou 201 Created, consideramos sucesso parcial (API respondeu)
+            # A lógica de "sucesso total" pode depender do corpo da resposta da API Fiscaut
+            if response.status_code == 200 or response.status_code == 201:
+                try:
+                    response_data = response.json()
+                    logger.info(f"Resposta da sincronização do fornecedor ({response.status_code}): {response_data}")
+                    # Assumindo que a API Fiscaut pode retornar um "success": false em um 200 OK.
+                    # Adapte esta lógica conforme a API Fiscaut real.
+                    if isinstance(response_data, dict) and response_data.get("success") is False:
+                        return {
+                            "success": False,
+                            "message": response_data.get("message", "API Fiscaut indicou uma falha na sincronização."),
+                            "details": response_data,
+                            "status_code": response.status_code
+                        }
+                    return {
+                        "success": True, 
+                        "message": "Dados do fornecedor enviados para sincronização com sucesso.", 
+                        "details": response_data,
+                        "status_code": response.status_code
+                    }
+                except ValueError: # Se a resposta não for JSON
+                    logger.warning(f"Resposta da sincronização do fornecedor ({response.status_code}) não é JSON: {response.text[:200]}")
+                    return {
+                        "success": True, # Sucesso na chamada, mas resposta inesperada
+                        "message": f"Fornecedor enviado, mas a resposta da API não foi JSON (Status: {response.status_code}).",
+                        "details": response.text,
+                        "status_code": response.status_code
+                    }
+            else: # Erros HTTP (4xx, 5xx)
+                error_message = f"Falha ao enviar dados do fornecedor para API Fiscaut (HTTP {response.status_code})."
+                details = response.text
+                try:
+                    error_details_json = response.json()
+                    error_message_api = error_details_json.get("message", "Erro não especificado pela API.")
+                    details_api = error_details_json.get("errors", error_details_json)
+                    logger.warning(f"{error_message} Detalhes da API: {details_api}")
+                    return {
+                        "success": False, 
+                        "message": f"API Fiscaut retornou erro {response.status_code}: {error_message_api}",
+                        "details": details_api,
+                        "status_code": response.status_code
+                    }
+                except ValueError:
+                    logger.warning(f"{error_message} Resposta: {response.text[:200]}")
+                    return {
+                        "success": False,
+                        "message": error_message,
+                        "details": response.text,
+                        "status_code": response.status_code
+                    }
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout ao enviar dados do fornecedor para API Fiscaut: {endpoint}")
+            return {"success": False, "message": "Tempo limite excedido ao tentar enviar dados para a API Fiscaut."}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro de requisição ao enviar dados do fornecedor para API Fiscaut: {e}")
+            return {"success": False, "message": f"Erro ao conectar à API Fiscaut para enviar dados: {e}"}
+        except Exception as e: # Outros erros inesperados
+            logger.error(f"Erro inesperado ao enviar dados do fornecedor: {e}", exc_info=True)
+            return {"success": False, "message": f"Ocorreu um erro inesperado ao enviar dados do fornecedor: {e}"} 

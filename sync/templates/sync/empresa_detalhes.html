@@ -7,7 +7,7 @@
 {% block page_subtitle %}{{ empresa.cgce_emp|default:'CNPJ não disponível' }}{% endblock %}
 
 {% block content %}
-<div class="admin-card space-y-6" x-data="empresaDetalhesPage({{ empresa.codi_emp|default:'null' }}, {{ empresa.habilitada_sincronizacao|yesno:'true,false,false' }})">
+<div class="admin-card space-y-6" x-data="empresaDetalhesPage({{ empresa.codi_emp|default:'null' }}, {{ empresa.habilitada_sincronizacao|yesno:'true,false,false' }}, '{{ empresa.cgce_emp|default:"" }}')">
 
     <!-- Botão Voltar e Título da Seção -->
     <div class="flex justify-between items-center mb-6">
@@ -112,15 +112,29 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">CNPJ/CGC</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Conta</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Ações</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
                         {% for fornecedor in fornecedores_list %}
-                            <tr>
+                            <tr id="fornecedor-row-{{ fornecedor.codi_for }}">
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_for }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.nome_for }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.cgce_for|default:'-' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_cta|default:'-' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <button @click="chamarSincronizacaoFornecedor($event)"
+                                            data-codi-for="{{ fornecedor.codi_for }}"
+                                            data-nome-for="{{ fornecedor.nome_for|escapejs }}"
+                                            data-cgce-for="{{ fornecedor.cgce_for|default:'' }}"
+                                            data-codi-cta="{{ fornecedor.codi_cta|default:'' }}"
+                                            class="admin-btn-icon admin-btn-primary sync-fornecedor-btn"
+                                            title="Sincronizar este fornecedor com a API Fiscaut">
+                                        <i data-feather="refresh-cw" class="w-4 h-4"></i>
+                                        <span class="sync-text">Sincronizar</span>
+                                        <i data-feather="loader" class="animate-spin w-4 h-4 ml-2 icon-loading" style="display: none;"></i>
+                                    </button>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -220,11 +234,12 @@
 
 {% block extra_js %}
 <script>
-    function empresaDetalhesPage(codiEmp, habilitadaInicial) {
+    function empresaDetalhesPage(codiEmp, habilitadaInicial, cnpjEmpresa) {
         return {
             codiEmp: codiEmp,
             habilitada: habilitadaInicial,
             isLoadingToggle: false,
+            cnpjEmpresa: cnpjEmpresa,
 
             getCsrfToken() {
                 let tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -298,6 +313,78 @@
                     this.$nextTick(() => {
                         feather.replace(); // Para atualizar os ícones (loader, check-circle, slash)
                     });
+                }
+            },
+
+            async chamarSincronizacaoFornecedor(event) {
+                const button = event.currentTarget;
+                const codiFor = button.dataset.codiFor;
+                const nomeFor = button.dataset.nomeFor;
+                const cgceFor = button.dataset.cgceFor;
+                const codiCta = button.dataset.codiCta;
+
+                // Mostrar spinner e desabilitar botão
+                const iconLoading = button.querySelector('.icon-loading');
+                const syncText = button.querySelector('.sync-text');
+                const originalButtonText = syncText.textContent;
+                iconLoading.style.display = 'inline-block';
+                syncText.textContent = 'Sinc...';
+                button.disabled = true;
+
+                console.log(`Tentando sincronizar Fornecedor ID: ${codiFor}, Nome: ${nomeFor}`);
+
+                const csrfToken = this.getCsrfToken();
+                if (!csrfToken) {
+                    this.showMessageDetalhes('Erro de segurança (Token CSRF ausente).', 'error');
+                    iconLoading.style.display = 'none';
+                    syncText.textContent = originalButtonText;
+                    button.disabled = false;
+                    return;
+                }
+
+                if (!this.cnpjEmpresa) {
+                    this.showMessageDetalhes('CNPJ da empresa principal não encontrado. Não é possível sincronizar.', 'error');
+                    iconLoading.style.display = 'none';
+                    syncText.textContent = originalButtonText;
+                    button.disabled = false;
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`{% url 'sync_api_sincronizar_fornecedor_empresa' %}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            cnpj_empresa: this.cnpjEmpresa,
+                            codi_emp: this.codiEmp,
+                            codi_for: codiFor,
+                            nome_fornecedor: nomeFor,
+                            cnpj_fornecedor: cgceFor,
+                            conta_contabil_fornecedor: codiCta
+                        })
+                    });
+
+                    const responseData = await response.json().catch(() => {
+                        return { success: false, message: `Erro HTTP ${response.status} ao sincronizar. Resposta não JSON.` };
+                    });
+
+                    if (responseData.success) {
+                        this.showMessageDetalhes(responseData.message || 'Fornecedor sincronizado com sucesso!', 'success');
+                    } else {
+                        this.showMessageDetalhes(responseData.message || 'Falha ao sincronizar fornecedor.', 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Erro ao chamar sincronização de fornecedor:', error);
+                    this.showMessageDetalhes(error.message || 'Erro de comunicação ao tentar sincronizar fornecedor.', 'error');
+                } finally {
+                    iconLoading.style.display = 'none';
+                    syncText.textContent = originalButtonText;
+                    button.disabled = false;
+                    this.$nextTick(() => { feather.replace(); });
                 }
             },
 

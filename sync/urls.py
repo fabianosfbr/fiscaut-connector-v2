@@ -39,4 +39,10 @@ urlpatterns = [
         views.api_test_fiscaut_config,
         name="sync_api_test_fiscaut_config",
     ),
+    # Nova URL para sincronizar fornecedor de uma empresa específica
+    path(
+        "api/empresa/sincronizar-fornecedor/",
+        views.api_sincronizar_fornecedor_empresa,
+        name="sync_api_sincronizar_fornecedor_empresa",
+    ),
 ]

@@ -14,6 +14,7 @@ from django.views import View
 from django.shortcuts import redirect
 from .models import FiscautApiConfig # Importar o novo modelo
 import requests # Adicionar importação para a biblioteca requests
+from .services.fiscaut_api_service import FiscautApiService # Certifique-se que está importado
 
 logger = logging.getLogger(__name__)
 
@@ -854,4 +855,74 @@ def api_test_fiscaut_config(request):
     except Exception as e:
         logger.error(f"Erro não tratado ao testar conexão com API Fiscaut: {str(e)}", exc_info=True)
         return JsonResponse({"success": False, "message": f"Erro interno do servidor: {str(e)}"}, status=500)
+
+
+@require_http_methods(["POST"])
+def api_sincronizar_fornecedor_empresa(request):
+    """
+    Endpoint da API para acionar a sincronização de um fornecedor específico 
+    de uma empresa com a API Fiscaut.
+    """
+    try:
+        data = json.loads(request.body)
+        cnpj_empresa = data.get("cnpj_empresa")
+        # codi_emp = data.get("codi_emp") # Código da empresa, pode ser usado para logs ou verificações adicionais
+        # codi_for = data.get("codi_for") # Código do fornecedor, pode ser usado para logs
+        nome_fornecedor = data.get("nome_fornecedor")
+        cnpj_fornecedor = data.get("cnpj_fornecedor")
+        conta_contabil_fornecedor = data.get("conta_contabil_fornecedor")
+
+        # Validação básica dos dados recebidos
+        required_fields = {
+            "cnpj_empresa": cnpj_empresa,
+            "nome_fornecedor": nome_fornecedor,
+            "cnpj_fornecedor": cnpj_fornecedor,
+            # conta_contabil_fornecedor pode ser opcional dependendo da API Fiscaut
+        }
+        missing_fields = [key for key, value in required_fields.items() if not value]
+        if missing_fields:
+            return JsonResponse({
+                "success": False, 
+                "message": f"Campos obrigatórios ausentes: {', '.join(missing_fields)}"
+            }, status=400)
+        
+        # Conta contábil pode ser opcional ou ter um valor padrão se não fornecida
+        conta_contabil_fornecedor = conta_contabil_fornecedor if conta_contabil_fornecedor else '' # Ou None, dependendo do que a API Fiscaut espera
+
+        logger.info(
+            f"API: Recebida requisição para sincronizar fornecedor. CNPJ Empresa: {cnpj_empresa}, "
+            f"Nome Forn: {nome_fornecedor}, CNPJ Forn: {cnpj_fornecedor}, Conta: {conta_contabil_fornecedor}"
+        )
+
+        fiscaut_service = FiscautApiService()
+        resultado_sinc = fiscaut_service.sincronizar_fornecedor(
+            cnpj_empresa=cnpj_empresa,
+            nome_fornecedor=nome_fornecedor,
+            cnpj_fornecedor=cnpj_fornecedor,
+            conta_contabil_fornecedor=conta_contabil_fornecedor
+        )
+
+        # A função sincronizar_fornecedor já retorna um dict com 'success', 'message', etc.
+        if resultado_sinc.get("success"):
+            logger.info(f"Sincronização do fornecedor {cnpj_fornecedor} para empresa {cnpj_empresa} bem-sucedida (via API Fiscaut).")
+            return JsonResponse(resultado_sinc, status=200)
+        else:
+            logger.warning(
+                f"Falha na sincronização do fornecedor {cnpj_fornecedor} para empresa {cnpj_empresa} (via API Fiscaut). "
+                f"Mensagem: {resultado_sinc.get('message')}, Detalhes: {resultado_sinc.get('details')}"
+            )
+            # Retorna o status code que veio da chamada ao serviço, se houver, ou 200 (com success:false)
+            # ou 500 se for um erro interno do serviço não relacionado à chamada HTTP em si.
+            status_code = resultado_sinc.get("status_code", 200) # Default to 200 if not specified by service error
+            if not isinstance(status_code, int) or status_code < 100 or status_code > 599:
+                 status_code = 500 if resultado_sinc.get("message", "").startswith("Erro interno") else 200
+
+            return JsonResponse(resultado_sinc, status=status_code)
+
+    except json.JSONDecodeError:
+        logger.warning("API sincronizar_fornecedor: JSON inválido recebido.")
+        return JsonResponse({"success": False, "message": "JSON inválido no corpo da requisição."}, status=400)
+    except Exception as e:
+        logger.error(f"API sincronizar_fornecedor: Erro não tratado: {str(e)}", exc_info=True)
+        return JsonResponse({"success": False, "message": f"Erro interno no servidor: {str(e)}"}, status=500)
 
