@@ -137,7 +137,7 @@
                                           :class="{
                                             'bg-green-100 text-green-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'SINCRONIZADO',
                                             'bg-red-100 text-red-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'ERRO',
-                                            'bg-gray-100 text-gray-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'NAO_SINCRONIZADO' || !'{{ fornecedor.status_sincronizacao_raw }}'
+                                            'bg-gray-100 text-gray-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'NAO_SINCRONIZADO' || !'{{ fornecedor.status_sincronizacao_raw }}' || '{{ fornecedor.status_sincronizacao_raw }}' === 'None'
                                           }">
                                         {{ fornecedor.status_sincronizacao|default:'Não Sincronizado' }}
                                     </span>
@@ -157,7 +157,7 @@
                                             :class="{
                                                 'bg-green-600 hover:bg-green-700 text-white': '{{ fornecedor.status_sincronizacao_raw }}' === 'SINCRONIZADO',
                                                 'bg-yellow-500 hover:bg-yellow-600 text-white': '{{ fornecedor.status_sincronizacao_raw }}' === 'ERRO', 
-                                                'bg-indigo-600 hover:bg-indigo-700 text-white': '{{ fornecedor.status_sincronizacao_raw }}' === 'NAO_SINCRONIZADO' || !'{{ fornecedor.status_sincronizacao_raw }}'
+                                                'bg-indigo-600 hover:bg-indigo-700 text-white': '{{ fornecedor.status_sincronizacao_raw }}' === 'NAO_SINCRONIZADO' || !'{{ fornecedor.status_sincronizacao_raw }}' || '{{ fornecedor.status_sincronizacao_raw }}' === 'None'
                                             }"
                                             title="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Re-sincronizar este fornecedor{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Tentar sincronizar novamente{% else %}Sincronizar este fornecedor com a API Fiscaut{% endif %}">
                                         
