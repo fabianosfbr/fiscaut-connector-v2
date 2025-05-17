@@ -45,24 +45,39 @@ class ODBCConnectionManager:
             bool: True se a configuração foi salva com sucesso, False caso contrário
         """
         try:
-            # Verificar se já existe uma configuração com esses dados
+            # Tenta buscar uma configuração ativa existente para atualizar,
+            # ou a mais recente se nenhuma estiver ativa (para evitar duplicatas por DSN/UID/Driver).
             existing_config = ODBCConfiguration.objects.filter(
                 dsn=dsn, uid=uid, driver=driver
-            ).first()
+            ).order_by('-is_active', '-updated_at').first()
 
             if existing_config:
                 # Atualiza a configuração existente
-                existing_config.pwd = pwd
-                existing_config.is_active = True
+                # Só atualiza a senha se a nova senha não for o placeholder "********"
+                if pwd != "********":
+                    existing_config.pwd = pwd
+                # Se pwd for "********", a senha existente (existing_config.pwd) é mantida.
+
+                existing_config.is_active = True # Garante que a configuração sendo salva/atualizada se torne ativa
                 existing_config.save()
 
                 logger.info(f"Configuração ODBC atualizada com sucesso para DSN: {dsn}")
             else:
                 # Cria uma nova configuração
+                # Se uma nova configuração está sendo criada, a senha não deve ser "********".
+                # A view deve idealmente impedir isso, mas como uma salvaguarda,
+                # poderíamos adicionar uma verificação aqui ou confiar na validação do frontend/view.
+                # Por ora, vamos assumir que pwd não será "********" para uma nova configuração.
+                if pwd == "********":
+                    logger.warning(f"Tentativa de criar nova configuração ODBC para DSN: {dsn} com senha placeholder. Isso não é recomendado.")
+                    # Decide-se não criar ou criar com senha vazia? Por ora, vamos permitir, mas logar.
+                    # Para maior segurança, poderia retornar False ou levantar um erro.
+                    # No entanto, para manter a consistência com o comportamento anterior de 'salvar o que vier',
+                    # vamos permitir, mas a view deve ser o ponto de bloqueio primário para isso.
+
                 ODBCConfiguration.objects.create(
                     dsn=dsn, uid=uid, pwd=pwd, driver=driver, is_active=True
                 )
-
                 logger.info(
                     f"Nova configuração ODBC criada com sucesso para DSN: {dsn}"
                 )
@@ -227,12 +242,14 @@ class ODBCConnectionManager:
         conn_string = self.build_connection_string(config)
         return pyodbc.connect(conn_string)
 
-    def test_connection(self, config: Dict[str, str] = None) -> Dict[str, Any]:
+    def test_connection(self, config_data: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         Testa a conexão com o banco de dados ODBC.
 
         Args:
-            config: Configuração de conexão para testar (opcional)
+            config_data: Dados da configuração de conexão para testar (opcional).
+                         Se None, usa a configuração salva.
+                         Se fornecido, pode conter 'pwd' como '********'.
 
         Returns:
             Dict contendo o resultado do teste, incluindo:
@@ -241,6 +258,8 @@ class ODBCConnectionManager:
             - dbms_version: Versão do DBMS (se sucesso)
             - databases: Lista de bancos de dados disponíveis (se sucesso)
             - error: Mensagem de erro (se falha)
+            - error_type: Tipo de erro (ex: 'connection_error', 'config_error')
+            - suggestion: Sugestão para o usuário (se aplicável)
         """
         result = {
             "success": False,
@@ -248,129 +267,133 @@ class ODBCConnectionManager:
             "dbms_version": "",
             "databases": [],
             "error": "",
-            "connection_string": "",  # String de conexão (parcial, sem senha)
-            "error_details": {},  # Detalhes adicionais sobre o erro
+            "error_type": "unknown_error",
+            "suggestion": ""
         }
+        conn: Optional[pyodbc.Connection] = None
+        actual_config_to_use: Dict[str, str] = {}
 
         try:
-            # Preparar a string de conexão para debug (sem a senha)
-            if config is None:
-                config = self.get_connection_config()
-                if not config:
-                    error_msg = "Não há configuração ODBC salva"
-                    logger.error(error_msg)
+            if config_data:
+                logger.debug(f"Testando conexão ODBC com dados fornecidos: {config_data.get('dsn')}")
+                # Trabalha com uma cópia para não modificar o original que pode ser usado em logs
+                temp_config = config_data.copy()
+
+                dsn_from_data = temp_config.get("dsn")
+                uid_from_data = temp_config.get("uid")
+                pwd_from_data = temp_config.get("pwd")
+
+                if not dsn_from_data or not uid_from_data:
+                    # Se pwd_from_data for None, pode ser que o usuário apagou o campo e não é "********"
+                    # mas DSN e UID são essenciais se config_data é fornecido (não é use_saved)
+                    error_msg = "DSN e UID são obrigatórios para testar uma configuração não salva."
+                    logger.warning(error_msg)
                     result["error"] = error_msg
+                    result["error_type"] = "config_error"
+                    result["suggestion"] = "Certifique-se de que DSN e UID estão preenchidos."
                     return result
 
-            # Criar versão segura da string de conexão para logging
-            safe_conn_parts = []
-            if config.get("dsn"):
-                safe_conn_parts.append(f"DSN={config['dsn']}")
-            if config.get("uid"):
-                safe_conn_parts.append(f"UID={config['uid']}")
-            if config.get("pwd"):
-                safe_conn_parts.append("PWD=******")
-            if config.get("driver"):
-                safe_conn_parts.append(f"DRIVER={config['driver']}")
+                if pwd_from_data == "********":
+                    logger.info(
+                        "Senha placeholder '********' detectada nos dados do formulário. Tentando usar senha salva."
+                    )
+                    saved_config_dict = self.get_connection_config()
+                    if (
+                        saved_config_dict
+                        and saved_config_dict.get("dsn") == dsn_from_data
+                        and saved_config_dict.get("uid") == uid_from_data
+                    ):
+                        logger.info("Configuração salva correspondente encontrada. Usando senha salva.")
+                        temp_config["pwd"] = saved_config_dict["pwd"]  # Usa a senha real
+                    else:
+                        logger.warning(
+                            "Nenhuma configuração salva correspondente encontrada para DSN/UID ou nenhuma configuração salva. O teste com '********' provavelmente falhará."
+                        )
+                        # Mantém pwd como "********", o que provavelmente causará falha na conexão,
+                        # mas reflete a intenção de testar com os dados fornecidos.
+                
+                actual_config_to_use = temp_config
 
-            safe_conn_string = ";".join(safe_conn_parts)
-            result["connection_string"] = safe_conn_string
+            else: # config_data is None, so use saved configuration
+                logger.debug("Testando conexão ODBC com configuração salva.")
+                saved_config = self.get_connection_config()
+                if not saved_config or not saved_config.get("dsn"):
+                    result["error"] = "Nenhuma configuração ODBC ativa encontrada para teste."
+                    result["error_type"] = "config_not_found"
+                    result["suggestion"] = "Salve uma configuração ODBC primeiro."
+                    logger.warning(result["error"])
+                    return result
+                actual_config_to_use = saved_config
 
-            logger.info(f"Testando conexão ODBC com: {safe_conn_string}")
+            if not actual_config_to_use.get("dsn"):
+                 result["error"] = "DSN não especificado para o teste de conexão."
+                 result["error_type"] = "config_error"
+                 logger.warning(result["error"])
+                 return result
 
-            # Tentar estabelecer conexão
-            connection = self.connect(config)
+            conn_string = self.build_connection_string(actual_config_to_use)
+            logger.info(f"String de conexão para teste (senha omitida): {self._build_connection_string(actual_config_to_use.get('dsn'), actual_config_to_use.get('uid'), '***', actual_config_to_use.get('driver'), hide_pwd=True)}")
 
-            # Obter informações do driver e DBMS
-            cursor = connection.cursor()
-
-            # Versão do driver e DBMS
-            try:
-                result["driver_version"] = (
-                    connection.getinfo(pyodbc.SQL_DRIVER_NAME)
-                    + " "
-                    + connection.getinfo(pyodbc.SQL_DRIVER_VER)
-                )
-                result["dbms_version"] = (
-                    connection.getinfo(pyodbc.SQL_DBMS_NAME)
-                    + " "
-                    + connection.getinfo(pyodbc.SQL_DBMS_VER)
-                )
-            except Exception as info_error:
-                logger.warning(
-                    f"Erro ao obter informações do driver/DBMS: {str(info_error)}"
-                )
-                result["driver_version"] = "Não disponível"
-                result["dbms_version"] = "Não disponível"
-
-            # Listar bancos de dados disponíveis (funciona principalmente para SQL Server)
-            try:
-                cursor.execute("SELECT name FROM sys.databases ORDER BY name")
-                result["databases"] = [row[0] for row in cursor.fetchall()]
-            except Exception as db_list_error:
-                # Em caso de erro, tentar outro método ou ignorar
-                logger.warning(
-                    f"Não foi possível listar bancos de dados: {str(db_list_error)}"
-                )
-
-                # Tenta obter pelo menos o nome do banco de dados atual
-                try:
-                    cursor.execute("SELECT DB_NAME()")
-                    db_name = cursor.fetchone()
-                    if db_name and db_name[0]:
-                        result["databases"] = [db_name[0]]
-                except Exception:
-                    pass
-
-            cursor.close()
-            connection.close()
+            conn = pyodbc.connect(conn_string, timeout=self.DEFAULT_TIMEOUT)
+            logger.info("Conexão ODBC estabelecida com sucesso para teste.")
 
             result["success"] = True
-            logger.info("Teste de conexão ODBC bem-sucedido")
+            result["message"] = "Conexão ODBC bem-sucedida!"
 
-        except ValueError as ve:
-            # Erro de valores inválidos (ex: configuração ausente)
-            error_msg = str(ve)
-            result["error"] = error_msg
-            result["error_details"] = {"type": "value_error", "message": error_msg}
-            logger.error(f"Erro de valor no teste de conexão ODBC: {error_msg}")
+            # Coletar informações da conexão
+            if conn:
+                try:
+                    result["driver_version"] = conn.getinfo(pyodbc.SQL_DRIVER_VER)
+                except pyodbc.Error as info_err:
+                    logger.warning(f"Não foi possível obter SQL_DRIVER_VER: {info_err}")
+                try:
+                    result["dbms_version"] = conn.getinfo(pyodbc.SQL_DBMS_VER)
+                except pyodbc.Error as info_err:
+                    logger.warning(f"Não foi possível obter SQL_DBMS_VER: {info_err}")
+                
+                # Listar bancos de dados (pode não ser suportado por todos os drivers/DBs)
+                # try:
+                #     cursor = conn.cursor()
+                #     # Este comando pode variar ou não ser suportado
+                #     # Para SQL Server: cursor.execute("SELECT name FROM sys.databases")
+                #     # Para outros, pode ser necessário algo diferente ou pode não funcionar.
+                #     # Por enquanto, vamos omitir para evitar erros com drivers variados.
+                #     # databases = [row.name for row in cursor.fetchall()]
+                #     # result["databases"] = databases
+                # except pyodbc.Error as db_list_err:
+                #     logger.warning(f"Erro ao listar bancos de dados: {db_list_err}")
+                #     result["databases"] = [f"Erro ao listar: {db_list_err}"]
 
         except pyodbc.Error as ex:
             sqlstate = ex.args[0]
             error_message = str(ex)
-            logger.error(
-                f"Erro de conexão ODBC (test_connection): {sqlstate} - {error_message}"
-            )
-            # Tentar extrair informações mais detalhadas se disponíveis
+            logger.error(f"Erro de conexão pyodbc (SQLSTATE: {sqlstate}): {error_message}")
             detailed_error = self._extract_detailed_error(error_message)
-            return {
-                "success": False,
-                "error": f"Erro ODBC: {detailed_error['message']}",
-                "driver_version": result["driver_version"],
-                "dbms_version": result["dbms_version"],
-                "databases": result["databases"],
-                "connection_string": result["connection_string"],
-                "error_details": detailed_error,
-            }
-        except Exception as e:
-            logger.error(f"Erro inesperado em test_connection: {str(e)}")
-            return {
-                "success": False,
-                "error": f"Erro inesperado: {str(e)}",
-                "driver_version": "",
-                "dbms_version": "",
-                "databases": [],
-                "connection_string": result["connection_string"],
-                "error_details": {
-                    "type": type(e).__name__,
-                    "message": str(e),
-                    "suggestion": "Verifique os logs do servidor.",
-                },
-            }
-        finally:
-            if "connection" in locals() and connection:
-                connection.close()
+            result["error"] = detailed_error.get("message", error_message)
+            result["error_type"] = "connection_error"
+            result["error_details"] = detailed_error
+            result["suggestion"] = detailed_error.get("suggestion", "Verifique DSN, credenciais, driver e conectividade de rede.")
 
+        except ValueError as ve:
+            error_message = str(ve)
+            logger.error(f"Erro de valor ao preparar teste de conexão ODBC: {error_message}")
+            result["error"] = error_message
+            result["error_type"] = "config_error"
+            result["suggestion"] = "Verifique os parâmetros de configuração fornecidos."
+
+        except Exception as e:
+            import traceback
+            error_message = str(e)
+            logger.error(f"Erro inesperado durante o teste de conexão ODBC: {error_message}\n{traceback.format_exc()}")
+            result["error"] = f"Erro inesperado: {error_message}"
+            result["error_type"] = "unexpected_error"
+            result["suggestion"] = "Verifique os logs do servidor para mais detalhes."
+
+        finally:
+            if conn:
+                conn.close()
+                logger.info("Conexão ODBC de teste fechada.")
+        
         return result
 
     def execute_query(
@@ -875,6 +898,67 @@ class ODBCConnectionManager:
             if cnxn:
                 logger.debug(f"Fechando conexão ODBC para list_empresas (DSN: {dsn}).")
                 cnxn.close()
+
+    # Métodos auxiliares que estavam faltando ou foram removidos:
+    def _format_error_result(self, error_message: str, error_type: str = "generic_error", suggestion: Optional[str] = None) -> Dict[str, Any]:
+        """Formata uma mensagem de erro padrão para os retornos dos métodos."""
+        details = {"type": error_type, "message": error_message}
+        if suggestion:
+            details["suggestion"] = suggestion
+        response = {
+            "success": False,
+            "data": [], # Adicionando para consistência com outras respostas de lista
+            "total_records": 0,
+            "error": error_message,
+            "error_details": details
+        }
+        # Campos como current_page, page_size podem ser adicionados pelos chamadores se relevante
+        return response
+
+    def _build_connection_string(self, dsn, uid, pwd, driver, hide_pwd=False):
+        """Auxiliar para construir a string de conexão, opcionalmente ocultando a senha."""
+        parts = []
+        if driver:
+            parts.append(f"DRIVER={{{driver}}}")
+        if dsn: # Adicionado para verificar se dsn existe
+            parts.append(f"DSN={dsn}")
+        if uid is not None:
+            parts.append(f"UID={uid}")
+        if pwd is not None:
+            password_to_use = "********" if hide_pwd else pwd
+            parts.append(f"PWD={password_to_use}")
+        return ";".join(parts)
+
+    def _extract_detailed_error(self, error_message: str) -> Dict[str, str]:
+        """Tenta extrair detalhes de uma mensagem de erro ODBC."""
+        details = {
+            "type": "odbc_error",
+            "message": error_message, 
+            "code": "N/A", 
+            "specific_type": "N/A", 
+            "suggestion": "Verifique a configuração da conexão, credenciais e logs do servidor de banco de dados."
+        }
+        try:
+            import re
+            match = re.search(r"\\[(.*?)\\]", error_message)
+            if match:
+                details["code"] = match.group(1)
+            
+            if "Login failed" in error_message:
+                details["specific_type"] = "login_failed"
+                details["suggestion"] = "Verifique o nome de usuário e a senha."
+            elif "Data source name not found" in error_message or "IM002" in details["code"]:
+                details["specific_type"] = "dsn_not_found"
+                details["suggestion"] = "Verifique se o DSN está configurado corretamente no sistema."
+            elif "Communication link failure" in error_message:
+                details["specific_type"] = "communication_link_failure"
+                details["suggestion"] = "Verifique a conectividade de rede com o servidor de banco de dados."
+
+        except Exception as e:
+            logger.warning(f"Erro ao tentar extrair detalhes do erro ODBC: {e}")
+            details["message"] = error_message 
+        
+        return details
 
 
 # Instância singleton para uso em toda a aplicação

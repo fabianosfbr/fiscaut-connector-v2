@@ -165,16 +165,23 @@ def api_get_odbc_config(request):
     try:
         config = odbc_manager.get_connection_config()
 
-        if "pwd" in config:
-            config["pwd"] = "********"
+        if config and config.get("dsn"):
+            if config.get("pwd") is not None:
+                config["pwd"] = "********" if config["pwd"] else ""
+            else:
+                config["pwd"] = ""
+        else:
+            config = {"dsn": "", "uid": "", "pwd": "", "driver": ""}
 
         return JsonResponse({"success": True, "config": config})
 
     except Exception as e:
+        logger.error(f"Erro ao recuperar configuração ODBC para API: {str(e)}")
         return JsonResponse(
             {
                 "success": False,
                 "message": f"Erro ao recuperar configuração ODBC: {str(e)}",
+                "config": {"dsn": "", "uid": "", "pwd": "", "driver": ""}
             },
             status=500,
         )
@@ -190,103 +197,59 @@ def api_test_odbc_connection(request):
         data = json.loads(request.body)
         use_saved = data.get("use_saved", False)
 
+        config_data_for_service = None # Será None se use_saved=True, ou o dict se use_saved=False
+
         if use_saved:
-            logger.info("Teste de conexão solicitado usando configuração salva")
-            config_data = None
+            logger.info("Teste de conexão ODBC solicitado usando configuração salva.")
+            # config_data_for_service permanece None, o serviço usará a config global salva.
         else:
             dsn = data.get("dsn")
             uid = data.get("uid")
-            pwd = data.get("pwd")
+            pwd_from_form = data.get("pwd") # Pode ser "", "********", ou uma nova senha
             driver = data.get("driver", "")
 
             logger.info(
-                f"Teste de conexão solicitado usando dados temporários: DSN={dsn}"
+                f"Teste de conexão ODBC solicitado usando dados do formulário: DSN={dsn}"
             )
 
-            if not dsn or not uid or not pwd:
+            # DSN e UID são sempre obrigatórios se não estiver usando a configuração salva.
+            if not dsn or not uid:
                 missing_fields = []
-                if not dsn:
-                    missing_fields.append("DSN")
-                if not uid:
-                    missing_fields.append("UID")
-                if not pwd:
-                    missing_fields.append("PWD")
-
+                if not dsn: missing_fields.append("DSN")
+                if not uid: missing_fields.append("UID")
+                
                 error_msg = f"Dados incompletos. Campo(s) obrigatório(s) ausente(s): {', '.join(missing_fields)}"
                 logger.warning(error_msg)
+                return JsonResponse({"success": False, "message": error_msg, "missing_fields": missing_fields}, status=400)
+            
+            # Monta o config_data para o serviço. 
+            # O serviço decidirá se usa pwd_from_form ou a senha salva se pwd_from_form for vazio/placeholder.
+            config_data_for_service = {"dsn": dsn, "uid": uid, "pwd": pwd_from_form, "driver": driver}
 
-                return JsonResponse(
-                    {
-                        "success": False,
-                        "message": error_msg,
-                        "missing_fields": missing_fields,
-                    },
-                    status=400,
-                )
+        # Chama o serviço de teste de conexão
+        # O serviço test_connection agora precisa lidar com config_data_for_service podendo ter pwd vazio/placeholder
+        result = odbc_manager.test_connection(config_data_for_service)
 
-            config_data = {"dsn": dsn, "uid": uid, "pwd": pwd, "driver": driver}
-
-        try:
-            result = odbc_manager.test_connection(config_data)
-
-            if result["success"]:
-                logger.info(
-                    f"Teste de conexão bem-sucedido para DSN: {config_data['dsn'] if config_data else 'configuração salva'}"
-                )
-            else:
-                logger.warning(f"Teste de conexão falhou: {result['error']}")
-
-            return JsonResponse({"success": True, "result": result})
-        except ValueError as ve:
-            logger.error(f"Erro ao testar conexão - valor inválido: {str(ve)}")
-            return JsonResponse(
-                {"success": False, "message": str(ve), "error_type": "value_error"},
-                status=400,
-            )
+        if result.get("success", False):
+            logger.info(f"Teste de conexão ODBC bem-sucedido (use_saved={use_saved}). Detalhes: {result}")
+        else:
+            logger.warning(f"Teste de conexão ODBC falhou (use_saved={use_saved}). Erro: {result.get('error', 'Desconhecido')}")
+        
+        # A view sempre retorna success=True se a chamada à API foi bem-sucedida (sem exceções na view).
+        # O resultado real do teste está dentro de result['result'] no frontend ou diretamente em 'result' aqui.
+        return JsonResponse({"success": True, "result": result})
 
     except json.JSONDecodeError:
         logger.error("JSON inválido recebido na requisição de teste de conexão ODBC")
-        return JsonResponse(
-            {
-                "success": False,
-                "message": "JSON inválido no corpo da requisição.",
-                "error_type": "invalid_json",
-            },
-            status=400,
-        )
+        return JsonResponse({"success": False, "message": "JSON inválido no corpo da requisição.", "error_type": "invalid_json"}, status=400)
+    except ValueError as ve: # Erro de validação vindo do serviço, por exemplo.
+        logger.error(f"Erro de valor ao testar conexão ODBC: {str(ve)}")
+        return JsonResponse({"success": False, "message": str(ve), "error_type": "value_error"}, status=400)
     except Exception as e:
         import traceback
-
         error_traceback = traceback.format_exc()
-        logger.error(
-            f"Erro não tratado ao testar conexão ODBC: {str(e)}\n{error_traceback}"
-        )
-
-        error_msg_lower = str(e).lower()
-        error_type = "unknown"
-
-        if "pyodbc" in error_msg_lower:
-            error_type = "pyodbc_error"
-            if "driver" in error_msg_lower:
-                error_type = "driver_error"
-        elif "connection" in error_msg_lower:
-            error_type = "connection_error"
-
-        return JsonResponse(
-            {
-                "success": False,
-                "message": f"Erro ao testar conexão ODBC: {str(e)}",
-                "error_type": error_type,
-                "error_detail": {
-                    "type": type(e).__name__,
-                    "message": str(e),
-                    "traceback_summary": (
-                        error_traceback.splitlines()[-3:] if error_traceback else []
-                    ),
-                },
-            },
-            status=500,
-        )
+        logger.error(f"Erro não tratado ao testar conexão ODBC: {str(e)}\n{error_traceback}")
+        return JsonResponse({"success": False, "message": f"Erro interno no servidor: {str(e)}"}, status=500)
 
 
 class DashboardView(TemplateView):
