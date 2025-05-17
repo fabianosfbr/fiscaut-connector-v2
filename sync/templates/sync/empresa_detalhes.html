@@ -153,8 +153,7 @@
                                             data-nome-for="{{ fornecedor.nome_for|escapejs }}"
                                             data-cgce-for="{{ fornecedor.cgce_for|default:'' }}"
                                             data-codi-cta="{{ fornecedor.codi_cta|default:'' }}"
-                                            class="text-sm flex items-center justify-center px-3 py-1.5 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-200"
-                                            :class="getButtonClass('{{ fornecedor.status_sincronizacao_raw }}')"
+                                            class="text-sm flex items-center justify-center px-3 py-1.5 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-200 {% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}bg-green-600 hover:bg-green-700 text-white{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}bg-yellow-500 hover:bg-yellow-600 text-white{% else %}bg-indigo-600 hover:bg-indigo-700 text-white{% endif %}"
                                             title="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Re-sincronizar este fornecedor{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Tentar sincronizar novamente{% else %}Sincronizar este fornecedor com a API Fiscaut{% endif %}">
                                         
                                         <i data-feather="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}check-circle{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}alert-triangle{% else %}refresh-cw{% endif %}" class="w-4 h-4 mr-1.5"></i>
@@ -276,6 +275,7 @@
                 } else if (status === 'ERRO') {
                     return 'bg-yellow-500 hover:bg-yellow-600 text-white';
                 } else {
+                    // Para "NAO_SINCRONIZADO" ou qualquer outro status
                     return 'bg-indigo-600 hover:bg-indigo-700 text-white';
                 }
             },
@@ -425,8 +425,7 @@
                             button.classList.remove(...allColorClasses.split(' '));
                             
                             // Adicionar classes para "SINCRONIZADO"
-                            const newClasses = this.getButtonClass('SINCRONIZADO');
-                            button.classList.add(...newClasses.split(' '));
+                            button.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
                             
                             if(buttonIcon) buttonIcon.dataset.feather = 'check-circle';
                             console.log("DEBUG_JS_SINC_FORN: Botão atualizado para Sincronizado.");
@@ -456,9 +455,14 @@
                          // Reabilitar o status original
                          const originalStatus = button.closest('tr').querySelector('td:nth-child(5) span').textContent.trim() === 'Sincronizado' ? 'SINCRONIZADO' : 
                                               (button.closest('tr').querySelector('td:nth-child(5) span').textContent.trim().includes('Erro') ? 'ERRO' : 'NAO_SINCRONIZADO');
-                         const originalClasses = this.getButtonClass(originalStatus);
-                         button.classList.add(...originalClasses.split(' '));
-                         // Se era 'ERRO', o :class adicionará 'bg-yellow-500'. Se era 'NAO_SINCRONIZADO', adicionará 'bg-indigo-600'.
+                         
+                         if (originalStatus === 'SINCRONIZADO') {
+                             button.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
+                         } else if (originalStatus === 'ERRO') {
+                             button.classList.add('bg-yellow-500', 'hover:bg-yellow-600', 'text-white');
+                         } else {
+                             button.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'text-white');
+                         }
                     }
                     button.disabled = false;
                     this.$nextTick(() => { feather.replace(); });
