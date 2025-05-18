@@ -1,0 +1,147 @@
+Instruções para Execução do Processador de Tarefas (django-background-tasks)
+
+O sistema utiliza a biblioteca `django-background-tasks` para processar tarefas demoradas,
+como a sincronização em lote de fornecedores, de forma assíncrona, sem bloquear a 
+interface do usuário.
+
+Para que estas tarefas sejam efetivamente executadas, é necessário manter um processo
+dedicado rodando no servidor. Este processo é iniciado pelo comando de gerenciamento
+do Django: `python manage.py process_tasks`.
+
+--- Instruções --- 
+
+**Requisitos Comuns (Linux e Windows):**
+
+1.  **Ambiente Virtual:** Certifique-se de que seu ambiente virtual Python (se estiver usando um, o que é recomendado) esteja ativado antes de executar os comandos.
+2.  **Caminho do Projeto:** Navegue até o diretório raiz do seu projeto Django, onde o arquivo `manage.py` está localizado.
+3.  **Dependências:** Garanta que todas as dependências do projeto, incluindo `django-background-tasks`, estejam instaladas (`pip install -r requirements.txt` ou `pip install django-background-tasks`).
+
+**Opção 1: Execução em Primeiro Plano (Para Desenvolvimento e Testes)**
+
+   Este método é mais simples e útil para desenvolvimento ou para testar rapidamente se as tarefas estão sendo processadas. O processo irá parar se o terminal for fechado.
+
+   Comando:
+   ```bash
+   python manage.py process_tasks
+   ```
+   Você verá os logs das tarefas sendo processadas diretamente no terminal.
+
+**Opção 2: Execução em Segundo Plano (Para Produção)**
+
+   Para ambientes de produção, o processo `process_tasks` deve rodar continuamente em segundo plano e ser reiniciado automaticamente caso falhe ou o servidor seja reiniciado.
+
+   **A. Linux (usando Supervisor)**
+
+      Supervisor é uma ferramenta popular para gerenciar processos no Linux.
+
+      1.  **Instalar Supervisor (se ainda não estiver instalado):**
+          ```bash
+          sudo apt-get update
+          sudo apt-get install supervisor 
+          ```
+          (O comando pode variar dependendo da sua distribuição Linux, ex: `yum install supervisor` para CentOS/RHEL).
+
+      2.  **Criar um arquivo de configuração para o `process_tasks`:**
+          Crie um arquivo, por exemplo, `/etc/supervisor/conf.d/fiscaut_connector_background_tasks.conf` com o seguinte conteúdo (ajuste os caminhos e usuário conforme necessário):
+
+          ```ini
+          [program:fiscaut_connector_tasks]
+          command=/caminho/para/seu/ambiente_virtual/bin/python /caminho/para/seu/projeto/manage.py process_tasks
+          directory=/caminho/para/seu/projeto/
+          user=seu_usuario_linux  ; Usuário que rodará o processo (ex: www-data, ou um usuário dedicado)
+          autostart=true
+          autorestart=true
+          stderr_logfile=/var/log/fiscaut_connector/tasks_stderr.log
+          stdout_logfile=/var/log/fiscaut_connector/tasks_stdout.log
+          environment=PYTHONUNBUFFERED=1 ; Para que os logs do Python apareçam imediatamente
+
+          ; Certifique-se que os diretórios de log existem e o usuário tem permissão para escrever neles:
+          ; sudo mkdir -p /var/log/fiscaut_connector/
+          ; sudo chown seu_usuario_linux:seu_usuario_linux /var/log/fiscaut_connector/
+          ```
+
+          **Substitua:**
+          *   `/caminho/para/seu/ambiente_virtual/bin/python`: Caminho completo para o executável Python do seu ambiente virtual.
+          *   `/caminho/para/seu/projeto/manage.py`: Caminho completo para o arquivo `manage.py`.
+          *   `/caminho/para/seu/projeto/`: Caminho completo para o diretório raiz do seu projeto.
+          *   `seu_usuario_linux`: O usuário sob o qual o processo será executado.
+
+      3.  **Informar ao Supervisor sobre a nova configuração:**
+          ```bash
+          sudo supervisorctl reread
+          sudo supervisorctl update
+          ```
+
+      4.  **Iniciar o processo e verificar o status:**
+          ```bash
+          sudo supervisorctl start fiscaut_connector_tasks
+          sudo supervisorctl status fiscaut_connector_tasks 
+          ```
+          Você também pode ver os logs em `/var/log/fiscaut_connector/`.
+
+   **B. Windows Server (usando NSSM - Non-Sucking Service Manager)**
+
+      NSSM é uma ferramenta útil para rodar aplicações como serviços no Windows.
+
+      1.  **Baixar NSSM:**
+          Faça o download do NSSM em [https://nssm.cc/download](https://nssm.cc/download). Extraia o `nssm.exe` para um local acessível (ex: `C:\NSSM`).
+
+      2.  **Abrir o Prompt de Comando (CMD) ou PowerShell como Administrador.**
+
+      3.  **Instalar o serviço:**
+          Navegue até o diretório onde você colocou o `nssm.exe` e execute:
+          ```batch
+          nssm.exe install FiscautConnectorBackgroundTasks
+          ```
+          Isso abrirá uma interface gráfica do NSSM.
+
+          *   **Path:** `C:\caminho\completo\para\ambiente_virtual\Scripts\python.exe`
+          *   **Startup directory:** `C:\caminho\completo\para\seu\projeto`
+          *   **Arguments:** `manage.py process_tasks`
+
+          **Substitua:**
+          *   `C:\caminho\completo\para\ambiente_virtual\Scripts\python.exe`: Caminho para o Python do seu ambiente virtual.
+          *   `C:\caminho\completo\para\seu\projeto`: Caminho para o diretório raiz do seu projeto.
+
+          Na aba "Details", você pode definir um nome de exibição e descrição.
+          Na aba "I/O", você pode configurar para onde redirecionar stdout e stderr se desejar (arquivos de log).
+          Na aba "Process", você pode ajustar prioridade e afinidade de CPU se necessário.
+          Na aba "Shutdown", certifique-se de que os métodos de parada estão configurados adequadamente (Ctrl+C é geralmente o que `manage.py` espera).
+          Na aba "Exit actions", configure o reinício automático em caso de falha (Restart application, Delay restart).
+
+          Clique em "Install service".
+
+      4.  **Iniciar o serviço:**
+          Você pode iniciar o serviço através do console de Serviços do Windows (`services.msc`) ou via linha de comando:
+          ```batch
+          nssm.exe start FiscautConnectorBackgroundTasks
+          ```
+          Para verificar o status:
+          ```batch
+          nssm.exe status FiscautConnectorBackgroundTasks
+          ```
+
+   **C. Windows Server (usando Tarefa Agendada - Menos robusto para daemons)**
+
+      Embora menos ideal para processos que precisam rodar continuamente (daemons), uma Tarefa Agendada pode ser usada para iniciar o script, especialmente se configurada para rodar na inicialização do sistema e reiniciar em caso de falha. É mais simples que NSSM se você não puder usar ferramentas de terceiros.
+
+      1.  Abra o "Agendador de Tarefas" (Task Scheduler).
+      2.  Clique em "Criar Tarefa Básica..." ou "Criar Tarefa...".
+      3.  **Nome:** Dê um nome, ex: "Fiscaut Connector Background Tasks".
+      4.  **Gatilho (Trigger):** Configure para iniciar "Ao fazer logon" ou "Ao iniciar o computador".
+      5.  **Ação (Action):**
+          *   **Ação:** "Iniciar um programa".
+          *   **Programa/script:** `C:\caminho\completo\para\ambiente_virtual\Scripts\python.exe`
+          *   **Adicione argumentos (opcional):** `manage.py process_tasks`
+          *   **Inicie em (opcional):** `C:\caminho\completo\para\seu\projeto`
+      6.  **Condições/Configurações:** Revise as outras abas para configurações como "Executar estando o usuário conectado ou não", "Executar com privilégios mais altos", e políticas de reinício em caso de falha (na aba "Configurações", "Se a tarefa falhar, reiniciar a cada X minutos").
+
+**Monitoramento e Logs:**
+
+Independentemente do método, é crucial monitorar os logs gerados pelo `process_tasks`.
+`django-background-tasks` loga informações sobre as tarefas sendo executadas, sucessos e falhas.
+Configure o logging do Django no seu `settings.py` para direcionar esses logs para arquivos ou um sistema de gerenciamento de logs centralizado, se você tiver um.
+
+Por padrão, `django-background-tasks` também armazena o status e erros das tarefas no banco de dados, que podem ser visualizados através do painel de administração do Django, se você tiver `background_task` adicionado ao admin.
+
+Lembre-se de adaptar todos os caminhos e nomes de usuário/serviço para corresponderem à sua configuração específica. 

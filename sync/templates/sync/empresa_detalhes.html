@@ -73,7 +73,17 @@
 
     {# --- Início da Seção de Fornecedores --- #}
     <div class="mt-8 pt-6 border-t border-gray-200">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">Fornecedores da Empresa</h2>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-700">Fornecedores da Empresa</h2>
+            <span>aqui</span>
+            <button @click="iniciarSincronizacaoEmLote()"
+                    class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center whitespace-nowrap"
+                    title="Iniciar a sincronização em lote para fornecedores pendentes (status Não Sincronizado ou Erro) que possuem CNPJ.">
+                <i data-feather="zap" class="w-4 h-4 mr-2"></i>
+                Sincronizar Pendentes em Lote
+                <span x-show="isLoadingLote" class="ml-2"><i data-feather="loader" class="animate-spin w-4 h-4"></i></span>
+            </button>
+        </div>
 
         {# Formulário de Filtros para Fornecedores #}
         <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
@@ -267,6 +277,7 @@
             codiEmp: codiEmp,
             habilitada: habilitadaInicial,
             isLoadingToggle: false,
+            isLoadingLote: false,
             cnpjEmpresa: cnpjEmpresa,
 
             getButtonClass(status) {
@@ -466,6 +477,64 @@
                     }
                     button.disabled = false;
                     this.$nextTick(() => { feather.replace(); });
+                }
+            },
+
+            async iniciarSincronizacaoEmLote() {
+                if (!confirm("Tem certeza que deseja iniciar a sincronização em lote para os fornecedores pendentes desta empresa?")) {
+                    return;
+                }
+                this.isLoadingLote = true;
+                const csrfToken = this.getCsrfToken();
+
+                if (!csrfToken) {
+                    console.error('CSRF token não encontrado para iniciarSincronizacaoEmLote!');
+                    this.showMessageDetalhes('Erro de segurança (Token CSRF ausente). Tente recarregar a página.', 'error');
+                    this.isLoadingLote = false;
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`{% url 'sync_api_sincronizar_fornecedores_lote' %}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            codi_emp: this.codiEmp
+                        })
+                    });
+
+                    const responseData = await response.json().catch(() => {
+                        // Se a resposta não for JSON, mas o status for OK, pode ser um erro no backend que não retornou JSON esperado
+                        if (!response.ok) throw new Error(`Erro HTTP: ${response.status} - Resposta não JSON ou vazia.`);
+                        return { success: response.ok, message: "Resposta da API não era JSON, mas a requisição pode ter sido aceita." }; 
+                    });
+
+                    if (!response.ok && !responseData.message) { // Adiciona uma mensagem de erro genérica se não houver uma específica
+                         responseData.message = `Falha ao iniciar sincronização em lote. Status: ${response.status}`;
+                    }
+                    
+                    // Garante que responseData.success reflita o status da resposta HTTP se não definido explicitamente
+                    if (typeof responseData.success === 'undefined') {
+                        responseData.success = response.ok;
+                    }
+
+                    if (responseData.success) {
+                        this.showMessageDetalhes(responseData.message || 'Sincronização em lote iniciada com sucesso. As atualizações aparecerão gradualmente.', 'success');
+                    } else {
+                        this.showMessageDetalhes(responseData.message || 'Falha ao iniciar a sincronização em lote.', 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Erro ao tentar iniciar sincronização em lote:', error);
+                    this.showMessageDetalhes(error.message || 'Erro de comunicação ao tentar iniciar a sincronização em lote.', 'error');
+                } finally {
+                    this.isLoadingLote = false;
+                    this.$nextTick(() => {
+                        feather.replace(); // Para atualizar os ícones (loader)
+                    });
                 }
             },
 
