@@ -183,7 +183,7 @@ def api_get_odbc_config(request):
             if config.get("pwd") is not None:
                 config["pwd"] = "********" if config["pwd"] else ""
             else:
-                config["pwd"] = "" # Garante que pwd seja uma string vazia se for None
+                config["pwd"] = ""  # Garante que pwd seja uma string vazia se for None
         else:
             # Se não houver config ou dsn, retorna uma estrutura vazia
             config = {"dsn": "", "uid": "", "pwd": "", "driver": ""}
@@ -193,12 +193,12 @@ def api_get_odbc_config(request):
         logger.error(f"Erro ao obter configuração ODBC: {str(e)}", exc_info=True)
         return JsonResponse(
             {
-                "success": False, 
+                "success": False,
                 "message": "Erro ao obter configuração ODBC.",
                 # Retorna uma estrutura de configuração padrão/vazia em caso de erro
-                "config": {"dsn": "", "uid": "", "pwd": "", "driver": ""} 
+                "config": {"dsn": "", "uid": "", "pwd": "", "driver": ""},
             },
-            status=500
+            status=500,
         )
 
 
@@ -261,8 +261,7 @@ def api_test_odbc_connection(request):
 
         # Chama o serviço de teste de conexão
         resultado_teste = odbc_manager.test_connection_service(
-            use_saved_config=use_saved,
-            config_data_for_test=config_data_for_service
+            use_saved_config=use_saved, config_data_for_test=config_data_for_service
         )
 
         if resultado_teste["success"]:
@@ -270,7 +269,9 @@ def api_test_odbc_connection(request):
             return JsonResponse(resultado_teste)
         else:
             logger.warning("Teste de conexão ODBC falhou.")
-            return JsonResponse(resultado_teste, status=400) # Pode ser 500 dependendo da natureza da falha
+            return JsonResponse(
+                resultado_teste, status=400
+            )  # Pode ser 500 dependendo da natureza da falha
 
     except json.JSONDecodeError:
         logger.error("JSON inválido recebido na requisição de teste ODBC")
@@ -283,7 +284,9 @@ def api_test_odbc_connection(request):
             status=400,
         )
     except Exception as e:
-        logger.error(f"Erro não tratado ao testar conexão ODBC: {str(e)}", exc_info=True)
+        logger.error(
+            f"Erro não tratado ao testar conexão ODBC: {str(e)}", exc_info=True
+        )
         return JsonResponse(
             {
                 "success": False,
@@ -1187,15 +1190,23 @@ def api_sincronizar_fornecedor_empresa(request):
 class GetOdbcConfigView(APIView):
     def get(self, request, *args, **kwargs):
         try:
-            from .services.odbc_config_service import OdbcConfigService # Importação local para evitar erro se o serviço não existir
+            from .services.odbc_config_service import (
+                OdbcConfigService,
+            )  # Importação local para evitar erro se o serviço não existir
+
             service = OdbcConfigService()
             config = service.get_config_as_dict()
             if not config.get("dsn"):
-                pass 
+                pass
             return Response({"success": True, "config": config})
         except Exception as e:
-            logger.error(f"Erro ao recuperar configuração ODBC para API: {str(e)}", exc_info=True)
-            from .services.odbc_config_service import OdbcConfigService # Importação local
+            logger.error(
+                f"Erro ao recuperar configuração ODBC para API: {str(e)}", exc_info=True
+            )
+            from .services.odbc_config_service import (
+                OdbcConfigService,
+            )  # Importação local
+
             return Response(
                 {
                     "success": False,
@@ -1210,47 +1221,65 @@ class SincronizarFornecedoresLoteView(APIView):
     """
     View para iniciar a sincronização em lote de fornecedores de uma empresa.
     """
+
     def post(self, request, *args, **kwargs):
-        codi_emp_param = request.data.get('codi_emp')
+        codi_emp_param = request.data.get("codi_emp")
         if not codi_emp_param:
             return Response(
                 {"success": False, "message": "Parâmetro 'codi_emp' é obrigatório."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             codi_emp = int(codi_emp_param)
         except ValueError:
             return Response(
-                {"success": False, "message": "Parâmetro 'codi_emp' deve ser um número inteiro."},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": False,
+                    "message": "Parâmetro 'codi_emp' deve ser um número inteiro.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         api_config_service = FiscautApiService()
         if not api_config_service.get_config():
-            logger.warning(f"Tentativa de sincronização em lote para empresa {codi_emp} sem config da API Fiscaut.")
+            logger.warning(
+                f"Tentativa de sincronização em lote para empresa {codi_emp} sem config da API Fiscaut."
+            )
             return Response(
-                {"success": False, "message": "A configuração da API Fiscaut é necessária antes de sincronizar em lote."},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": False,
+                    "message": "A configuração da API Fiscaut é necessária antes de sincronizar em lote.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            from .models import Empresa, Fornecedor, FornecedorStatusSincronizacao # Importações locais
+            from .models import (
+                Empresa,
+                Fornecedor,
+                FornecedorStatusSincronizacao,
+            )  # Importações locais
+
             empresa_odbc = get_object_or_404(Empresa, codi_emp=codi_emp)
-            logger.info(f"Iniciando busca de fornecedores para sincronização em lote da empresa {codi_emp} - {getattr(empresa_odbc, 'razao_emp', 'Nome não disponível')}.")
-            
+            logger.info(
+                f"Iniciando busca de fornecedores para sincronização em lote da empresa {codi_emp} - {getattr(empresa_odbc, 'razao_emp', 'Nome não disponível')}."
+            )
+
             fornecedores_da_empresa = Fornecedor.objects.filter(empresa=empresa_odbc)
             contador_tarefas_enfileiradas = 0
 
             for fornecedor_odbc in fornecedores_da_empresa:
-                if not getattr(fornecedor_odbc, 'cgce_for', '').strip():
-                    logger.debug(f"Fornecedor ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} da empresa {codi_emp} ignorado (sem CNPJ).")
+                if not getattr(fornecedor_odbc, "cgce_for", "").strip():
+                    logger.debug(
+                        f"Fornecedor ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} da empresa {codi_emp} ignorado (sem CNPJ)."
+                    )
                     continue
-                
+
                 status_valido_para_sinc = False
                 try:
                     status_atual = FornecedorStatusSincronizacao.objects.get(
                         codi_emp_odbc=empresa_odbc.codi_emp,
-                        codi_for_odbc=getattr(fornecedor_odbc, 'codi_for', '')
+                        codi_for_odbc=getattr(fornecedor_odbc, "codi_for", ""),
                     )
                     if status_atual.status_sincronizacao in [
                         FornecedorStatusSincronizacao.StatusChoice.NAO_SINCRONIZADO,
@@ -1258,29 +1287,54 @@ class SincronizarFornecedoresLoteView(APIView):
                     ]:
                         status_valido_para_sinc = True
                 except FornecedorStatusSincronizacao.DoesNotExist:
-                    status_valido_para_sinc = True # Considerar não existente como elegível
-                
+                    status_valido_para_sinc = (
+                        True  # Considerar não existente como elegível
+                    )
+
                 if status_valido_para_sinc:
-                    logger.info(f"Enfileirando tarefa para Forn. ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} (CNPJ: {getattr(fornecedor_odbc, 'cgce_for', '?')}) da Emp. {empresa_odbc.codi_emp}")
+                    logger.info(
+                        f"Enfileirando tarefa para Forn. ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} (CNPJ: {getattr(fornecedor_odbc, 'cgce_for', '?')}) da Emp. {empresa_odbc.codi_emp}"
+                    )
                     processar_sincronizacao_fornecedor_task(
-                        cnpj_empresa=getattr(empresa_odbc, 'cgce_emp', ''),
-                        nome_fornecedor=getattr(fornecedor_odbc, 'nome_for', ''),
-                        cnpj_fornecedor=getattr(fornecedor_odbc, 'cgce_for', ''),
-                        conta_contabil_fornecedor=getattr(fornecedor_odbc, 'codi_cta', ''),
+                        cnpj_empresa=getattr(empresa_odbc, "cgce_emp", ""),
+                        nome_fornecedor=getattr(fornecedor_odbc, "nome_for", ""),
+                        cnpj_fornecedor=getattr(fornecedor_odbc, "cgce_for", ""),
+                        conta_contabil_fornecedor=getattr(
+                            fornecedor_odbc, "codi_cta", ""
+                        ),
                         codi_emp_odbc=empresa_odbc.codi_emp,
-                        codi_for_odbc=getattr(fornecedor_odbc, 'codi_for', '')
+                        codi_for_odbc=getattr(fornecedor_odbc, "codi_for", ""),
                     )
                     contador_tarefas_enfileiradas += 1
                 else:
-                    logger.debug(f"Fornecedor ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} da emp {codi_emp} não elegível para sinc. (status atual não é pendente/erro).")
+                    logger.debug(
+                        f"Fornecedor ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} da emp {codi_emp} não elegível para sinc. (status atual não é pendente/erro)."
+                    )
 
-            msg = f"{contador_tarefas_enfileiradas} tarefas enfileiradas." if contador_tarefas_enfileiradas > 0 else "Nenhum fornecedor elegível encontrado."
+            msg = (
+                f"{contador_tarefas_enfileiradas} tarefas enfileiradas."
+                if contador_tarefas_enfileiradas > 0
+                else "Nenhum fornecedor elegível encontrado."
+            )
             logger.info(f"Sincronização em lote para empresa {codi_emp}: {msg}")
-            return Response({"success": True, "message": msg}, status=status.HTTP_200_OK)
+            return Response(
+                {"success": True, "message": msg}, status=status.HTTP_200_OK
+            )
 
         except Empresa.DoesNotExist:
-            logger.warning(f"Empresa {codi_emp} não encontrada para sincronização em lote.")
-            return Response({"success": False, "message": f"Empresa {codi_emp} não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+            logger.warning(
+                f"Empresa {codi_emp} não encontrada para sincronização em lote."
+            )
+            return Response(
+                {"success": False, "message": f"Empresa {codi_emp} não encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except Exception as e:
-            logger.error(f"Erro em SincronizarFornecedoresLoteView para empresa {codi_emp}: {e}", exc_info=True)
-            return Response({"success": False, "message": "Erro interno ao processar." }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(
+                f"Erro em SincronizarFornecedoresLoteView para empresa {codi_emp}: {e}",
+                exc_info=True,
+            )
+            return Response(
+                {"success": False, "message": "Erro interno ao processar."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

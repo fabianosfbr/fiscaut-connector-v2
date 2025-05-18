@@ -1,19 +1,21 @@
 from background_task import background
 import logging
 from .services.fiscaut_api_service import FiscautApiService
+
 # Se FornecedorStatusSincronizacao ou outros modelos forem diretamente necessários aqui, importe-os.
 # Ex: from .models import FornecedorStatusSincronizacao
 
 logger = logging.getLogger(__name__)
 
-@background(schedule=0) # schedule=0 para executar o mais rápido possível
+
+@background(schedule=0)  # schedule=0 para executar o mais rápido possível
 def processar_sincronizacao_fornecedor_task(
     cnpj_empresa: str,
     nome_fornecedor: str,
-    cnpj_fornecedor: str, # Já virá preenchido, conforme novo requisito
+    cnpj_fornecedor: str,  # Já virá preenchido, conforme novo requisito
     conta_contabil_fornecedor: str,
     codi_emp_odbc: int,
-    codi_for_odbc: str
+    codi_for_odbc: str,
 ):
     """
     Tarefa de background para sincronizar um único fornecedor com a API Fiscaut.
@@ -24,7 +26,7 @@ def processar_sincronizacao_fornecedor_task(
     )
     try:
         api_service = FiscautApiService()
-        # A lógica de chamada à API, tratamento de resposta e registro de status 
+        # A lógica de chamada à API, tratamento de resposta e registro de status
         # (sucesso/erro) já está encapsulada em sincronizar_fornecedor.
         resultado_sinc = api_service.sincronizar_fornecedor(
             cnpj_empresa=cnpj_empresa,
@@ -32,9 +34,9 @@ def processar_sincronizacao_fornecedor_task(
             cnpj_fornecedor=cnpj_fornecedor,
             conta_contabil_fornecedor=conta_contabil_fornecedor,
             codi_emp_odbc=codi_emp_odbc,
-            codi_for_odbc=codi_for_odbc
+            codi_for_odbc=codi_for_odbc,
         )
-        
+
         if resultado_sinc.get("success"):
             logger.info(
                 f"BG_TASK: Sincronização bem-sucedida para Forn. ODBC {codi_for_odbc}. "
@@ -54,8 +56,8 @@ def processar_sincronizacao_fornecedor_task(
         logger.error(
             f"BG_TASK: Erro crítico na tarefa de sincronização para Forn. ODBC {codi_for_odbc} "
             f"da Emp. ODBC {codi_emp_odbc}: {e}",
-            exc_info=True # Captura o traceback completo
+            exc_info=True,  # Captura o traceback completo
         )
-        # Não é necessário um 'raise' aqui, pois a falha já deve ser registrada pelo 
+        # Não é necessário um 'raise' aqui, pois a falha já deve ser registrada pelo
         # FiscautApiService. Se o FiscautApiService falhar em registrar,
-        # teremos este log da task para diagnóstico. 
+        # teremos este log da task para diagnóstico.

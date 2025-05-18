@@ -45,6 +45,14 @@ urlpatterns = [
         views.api_sincronizar_fornecedor_empresa,
         name="sync_api_sincronizar_fornecedor_empresa",
     ),
-    path('api/config/odbc/get/', views.GetOdbcConfigView.as_view(), name='sync_api_get_odbc_config'),
-    path('api/empresas/sincronizar-lote/', views.SincronizarFornecedoresLoteView.as_view(), name='sync_api_sincronizar_fornecedores_lote'),
+    path(
+        "api/config/odbc/get/",
+        views.GetOdbcConfigView.as_view(),
+        name="sync_api_get_odbc_config",
+    ),
+    path(
+        "api/empresas/sincronizar-lote/",
+        views.SincronizarFornecedoresLoteView.as_view(),
+        name="sync_api_sincronizar_fornecedores_lote",
+    ),
 ]
