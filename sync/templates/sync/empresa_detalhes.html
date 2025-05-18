@@ -74,13 +74,12 @@
     {# --- Início da Seção de Fornecedores --- #}
     <div class="mt-8 pt-6 border-t border-gray-200">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-semibold text-gray-700">Fornecedores da Empresa</h2>
-            <span>aqui</span>
+            <h2 class="text-xl font-semibold text-gray-700">Fornecedores da Empresa</h2>            
             <button @click="iniciarSincronizacaoEmLote()"
-                    class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center whitespace-nowrap"
+                    class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center whitespace-nowrap"
                     title="Iniciar a sincronização em lote para fornecedores pendentes (status Não Sincronizado ou Erro) que possuem CNPJ.">
                 <i data-feather="zap" class="w-4 h-4 mr-2"></i>
-                Sincronizar Pendentes em Lote
+                Sincronizar todos os fornecedores
                 <span x-show="isLoadingLote" class="ml-2"><i data-feather="loader" class="animate-spin w-4 h-4"></i></span>
             </button>
         </div>
