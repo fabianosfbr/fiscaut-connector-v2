@@ -1,6 +1,7 @@
 from background_task import background
 import logging
 from .services.fiscaut_api_service import FiscautApiService
+import time
 
 # Se FornecedorStatusSincronizacao ou outros modelos forem diretamente necessários aqui, importe-os.
 # Ex: from .models import FornecedorStatusSincronizacao
@@ -25,6 +26,9 @@ def processar_sincronizacao_fornecedor_task(
         f"da Empresa ODBC {codi_emp_odbc} (CNPJ Emp: {cnpj_empresa}, CNPJ Forn: {cnpj_fornecedor})."
     )
     try:
+        # Adiciona uma pausa de 1 segundo antes de cada chamada à API
+        time.sleep(1)
+
         api_service = FiscautApiService()
         # A lógica de chamada à API, tratamento de resposta e registro de status
         # (sucesso/erro) já está encapsulada em sincronizar_fornecedor.

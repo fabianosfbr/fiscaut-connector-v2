@@ -1254,82 +1254,132 @@ class SincronizarFornecedoresLoteView(APIView):
             )
 
         try:
-            from .models import (
-                Empresa,
-                Fornecedor,
-                FornecedorStatusSincronizacao,
-            )  # Importações locais
+            # 1. Obter detalhes da empresa (CNPJ) do ODBC via serviço
+            detalhes_empresa_odbc = empresa_sinc_service.get_detalhes_empresa(codi_emp)
+            
+            if not detalhes_empresa_odbc or not detalhes_empresa_odbc.get("cgce_emp"):
+                logger.warning(f"Não foi possível obter detalhes (CNPJ) da empresa ODBC {codi_emp} para sincronização em lote.")
+                return Response(
+                    {"success": False, "message": f"Não foi possível obter CNPJ para a empresa {codi_emp} via ODBC. Verifique se a empresa existe."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            cnpj_empresa_para_sinc = detalhes_empresa_odbc["cgce_emp"]
+            nome_empresa_para_log = detalhes_empresa_odbc.get("razao_emp", f"Empresa {codi_emp}")
 
-            empresa_odbc = get_object_or_404(Empresa, codi_emp=codi_emp)
             logger.info(
-                f"Iniciando busca de fornecedores para sincronização em lote da empresa {codi_emp} - {getattr(empresa_odbc, 'razao_emp', 'Nome não disponível')}."
+                f"Sinc. Lote: Iniciando busca de fornecedores para empresa {codi_emp} - {nome_empresa_para_log} (CNPJ: {cnpj_empresa_para_sinc})."
             )
 
-            fornecedores_da_empresa = Fornecedor.objects.filter(empresa=empresa_odbc)
+            # 2. Listar TODOS os fornecedores da empresa via ODBC, implementando paginação manual.
+            todos_fornecedores_odbc_data_list = []
+            page_number = 1
+            page_size_para_busca = 100 # Buscar em lotes de 100, ajuste conforme necessário
+            max_paginas_seguranca = 500 # Limite de segurança para evitar loops infinitos
+            paginas_buscadas = 0
+
+            while paginas_buscadas < max_paginas_seguranca:
+                logger.debug(f"Sinc. Lote: Buscando fornecedores da empresa {codi_emp}, página {page_number}, tamanho {page_size_para_busca}")
+                resultado_pagina_fornecedores = odbc_manager.list_fornecedores_empresa(
+                    codi_emp=codi_emp,
+                    filters={}, # Sem filtros específicos para buscar todos
+                    page_number=page_number,
+                    page_size=page_size_para_busca
+                )
+
+                if resultado_pagina_fornecedores.get("error"):
+                    error_msg = resultado_pagina_fornecedores.get('error')
+                    logger.error(f"Sinc. Lote: Erro ao buscar página {page_number} de fornecedores da empresa {codi_emp} via ODBC: {error_msg}")
+                    return Response(
+                        {"success": False, "message": f"Erro ao buscar fornecedores (página {page_number}) para a empresa {codi_emp} via ODBC: {error_msg}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+
+                fornecedores_nesta_pagina = resultado_pagina_fornecedores.get("data", [])
+                
+                if not fornecedores_nesta_pagina:
+                    logger.debug(f"Sinc. Lote: Página {page_number} não retornou fornecedores. Fim da busca para empresa {codi_emp}.")
+                    break 
+                
+                todos_fornecedores_odbc_data_list.extend(fornecedores_nesta_pagina)
+                logger.debug(f"Sinc. Lote: {len(fornecedores_nesta_pagina)} fornecedores adicionados da página {page_number}. Total parcial: {len(todos_fornecedores_odbc_data_list)}.")
+                
+                if len(fornecedores_nesta_pagina) < page_size_para_busca:
+                    logger.debug(f"Sinc. Lote: Página {page_number} retornou menos que o page_size ({len(fornecedores_nesta_pagina)} < {page_size_para_busca}). Assumindo ser a última página.")
+                    break
+
+                page_number += 1
+                paginas_buscadas += 1
+                if paginas_buscadas >= max_paginas_seguranca:
+                    logger.warning(f"Sinc. Lote: Atingido o limite máximo de {max_paginas_seguranca} páginas buscadas para empresa {codi_emp}. Interrompendo busca.")
+                    break
+            
+            if not todos_fornecedores_odbc_data_list:
+                logger.info(f"Sinc. Lote: Nenhum fornecedor encontrado para a empresa {codi_emp} ({nome_empresa_para_log}) via ODBC.")
+                return Response(
+                    {"success": True, "message": f"Nenhum fornecedor encontrado para a empresa {codi_emp} ({nome_empresa_para_log}) para sincronizar."},
+                    status=status.HTTP_200_OK,
+                )
+
+            logger.info(f"Sinc. Lote: {len(todos_fornecedores_odbc_data_list)} fornecedores encontrados via ODBC para empresa {codi_emp}. Verificando elegibilidade...")
             contador_tarefas_enfileiradas = 0
 
-            for fornecedor_odbc in fornecedores_da_empresa:
-                if not getattr(fornecedor_odbc, "cgce_for", "").strip():
-                    logger.debug(
-                        f"Fornecedor ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} da empresa {codi_emp} ignorado (sem CNPJ)."
-                    )
+            for fornecedor_data in todos_fornecedores_odbc_data_list:
+                codi_for_odbc = str(fornecedor_data.get("codi_for", "")).strip()
+                cnpj_fornecedor = str(fornecedor_data.get("cgce_for", "")).strip()
+                nome_fornecedor = str(fornecedor_data.get("razao_social", "") or fornecedor_data.get("nome_for", "")).strip()
+                conta_contabil_fornecedor = str(fornecedor_data.get("codi_cta", "") or fornecedor_data.get("conta_ctb", "")).strip()
+
+                if not codi_for_odbc:
+                    logger.debug(f"Sinc. Lote: Fornecedor da empresa {codi_emp} ignorado (sem codi_for). Data: {fornecedor_data}")
+                    continue
+                if not cnpj_fornecedor:
+                    logger.debug(f"Sinc. Lote: Fornecedor {codi_for_odbc} ({nome_fornecedor if nome_fornecedor else 'Nome não disponível'}) da empresa {codi_emp} ignorado (sem CNPJ).")
+                    continue
+                if not nome_fornecedor: 
+                    logger.debug(f"Sinc. Lote: Fornecedor {codi_for_odbc} (CNPJ: {cnpj_fornecedor}) da empresa {codi_emp} ignorado (sem nome).")
                     continue
 
                 status_valido_para_sinc = False
                 try:
-                    status_atual = FornecedorStatusSincronizacao.objects.get(
-                        codi_emp_odbc=empresa_odbc.codi_emp,
-                        codi_for_odbc=getattr(fornecedor_odbc, "codi_for", ""),
+                    status_obj = FornecedorStatusSincronizacao.objects.get(
+                        codi_emp_odbc=codi_emp, # codi_emp é int
+                        codi_for_odbc=codi_for_odbc, # codi_for_odbc é str
                     )
-                    if status_atual.status_sincronizacao in [
-                        FornecedorStatusSincronizacao.StatusChoice.NAO_SINCRONIZADO,
-                        FornecedorStatusSincronizacao.StatusChoice.ERRO,
-                    ]:
+                    if status_obj.status_sincronizacao in ["NAO_SINCRONIZADO", "ERRO"]:
                         status_valido_para_sinc = True
                 except FornecedorStatusSincronizacao.DoesNotExist:
-                    status_valido_para_sinc = (
-                        True  # Considerar não existente como elegível
-                    )
+                    status_valido_para_sinc = True 
 
                 if status_valido_para_sinc:
                     logger.info(
-                        f"Enfileirando tarefa para Forn. ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} (CNPJ: {getattr(fornecedor_odbc, 'cgce_for', '?')}) da Emp. {empresa_odbc.codi_emp}"
+                        f"Sinc. Lote: Enfileirando tarefa para Forn. ODBC {codi_for_odbc} (CNPJ: {cnpj_fornecedor}, Nome: {nome_fornecedor}) da Emp. {codi_emp}"
                     )
                     processar_sincronizacao_fornecedor_task(
-                        cnpj_empresa=getattr(empresa_odbc, "cgce_emp", ""),
-                        nome_fornecedor=getattr(fornecedor_odbc, "nome_for", ""),
-                        cnpj_fornecedor=getattr(fornecedor_odbc, "cgce_for", ""),
-                        conta_contabil_fornecedor=getattr(
-                            fornecedor_odbc, "codi_cta", ""
-                        ),
-                        codi_emp_odbc=empresa_odbc.codi_emp,
-                        codi_for_odbc=getattr(fornecedor_odbc, "codi_for", ""),
+                        cnpj_empresa=cnpj_empresa_para_sinc,
+                        nome_fornecedor=nome_fornecedor,
+                        cnpj_fornecedor=cnpj_fornecedor,
+                        conta_contabil_fornecedor=conta_contabil_fornecedor,
+                        codi_emp_odbc=codi_emp,
+                        codi_for_odbc=codi_for_odbc,
                     )
                     contador_tarefas_enfileiradas += 1
                 else:
                     logger.debug(
-                        f"Fornecedor ODBC {getattr(fornecedor_odbc, 'codi_for', '?')} da emp {codi_emp} não elegível para sinc. (status atual não é pendente/erro)."
+                        f"Sinc. Lote: Fornecedor ODBC {codi_for_odbc} (Nome: {nome_fornecedor}) da emp {codi_emp} não elegível para sinc. Status: {status_obj.get_status_sincronizacao_display()} (ID: {status_obj.id if hasattr(status_obj, 'id') else 'N/A'})."
                     )
 
             msg = (
-                f"{contador_tarefas_enfileiradas} tarefas enfileiradas."
+                f"{contador_tarefas_enfileiradas} tarefas de sincronização de fornecedores foram enfileiradas para a empresa {codi_emp} - {nome_empresa_para_log}."
                 if contador_tarefas_enfileiradas > 0
-                else "Nenhum fornecedor elegível encontrado."
+                else f"Nenhum fornecedor elegível para sincronização encontrado para a empresa {codi_emp} - {nome_empresa_para_log}."
             )
-            logger.info(f"Sincronização em lote para empresa {codi_emp}: {msg}")
+            logger.info(f"Sinc. Lote: Concluído para empresa {codi_emp}. {msg}")
             return Response(
-                {"success": True, "message": msg}, status=status.HTTP_200_OK
+                {"success": True, "message": msg, "tarefas_enfileiradas": contador_tarefas_enfileiradas}, 
+                status=status.HTTP_200_OK
             )
 
-        except Empresa.DoesNotExist:
-            logger.warning(
-                f"Empresa {codi_emp} não encontrada para sincronização em lote."
-            )
-            return Response(
-                {"success": False, "message": f"Empresa {codi_emp} não encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as e:
+        except Exception as e: 
             logger.error(
                 f"Erro em SincronizarFornecedoresLoteView para empresa {codi_emp}: {e}",
                 exc_info=True,
