@@ -73,29 +73,61 @@
 
     <!-- Sistema de Abas -->
     <div x-data="{ activeTab: 'fornecedores' }" class="mt-8">
-        <div class="border-b border-gray-200">
-            <nav class="flex space-x-4" aria-label="Tabs">
-                <button @click="activeTab = 'fornecedores'"
-                        :class="activeTab === 'fornecedores' ? 'bg-indigo-100 text-indigo-700 ring-indigo-500 ring-1 ring-inset' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'"
-                        class="whitespace-nowrap py-2.5 px-3.5 rounded-md font-medium text-sm transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                    Fornecedores
-                </button>
-                <button @click="activeTab = 'clientes'"
-                        :class="activeTab === 'clientes' ? 'bg-indigo-100 text-indigo-700 ring-indigo-500 ring-1 ring-inset' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'"
-                        class="whitespace-nowrap py-2.5 px-3.5 rounded-md font-medium text-sm transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                    Clientes
-                </button>
-                <button @click="activeTab = 'planos_contas'"
-                        :class="activeTab === 'planos_contas' ? 'bg-indigo-100 text-indigo-700 ring-indigo-500 ring-1 ring-inset' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'"
-                        class="whitespace-nowrap py-2.5 px-3.5 rounded-md font-medium text-sm transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                    Planos de Contas
-                </button>
-                <button @click="activeTab = 'acumuladores'"
-                        :class="activeTab === 'acumuladores' ? 'bg-indigo-100 text-indigo-700 ring-indigo-500 ring-1 ring-inset' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'"
-                        class="whitespace-nowrap py-2.5 px-3.5 rounded-md font-medium text-sm transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                    Acumuladores
-                </button>
-            </nav>
+        <div class="border-b border-gray-200 dark:border-gray-700">
+            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500 dark:text-gray-400">
+                <li class="me-2">
+                    <button @click="activeTab = 'fornecedores'"
+                            :class="activeTab === 'fornecedores'
+                                ? 'text-blue-600 border-b-2 border-blue-600 rounded-t-lg dark:text-blue-500 dark:border-blue-500'
+                                : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'"
+                            class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group">
+                        <i data-feather="truck" class="w-4 h-4 me-2"
+                           :class="activeTab === 'fornecedores'
+                                ? 'text-blue-600 dark:text-blue-500'
+                                : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'"></i>
+                        Fornecedores
+                    </button>
+                </li>
+                <li class="me-2">
+                    <button @click="activeTab = 'clientes'"
+                            :class="activeTab === 'clientes'
+                                ? 'text-blue-600 border-blue-600 dark:text-blue-500 dark:border-blue-500'
+                                : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'"
+                            class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group">
+                        <i data-feather="users" class="w-4 h-4 me-2"
+                           :class="activeTab === 'clientes'
+                                ? 'text-blue-600 dark:text-blue-500'
+                                : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'"></i>
+                        Clientes
+                    </button>
+                </li>
+                <li class="me-2">
+                    <button @click="activeTab = 'planos_contas'"
+                            :class="activeTab === 'planos_contas'
+                                ? 'text-blue-600 border-blue-600 dark:text-blue-500 dark:border-blue-500'
+                                : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'"
+                            class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group">
+                        <i data-feather="book-open" class="w-4 h-4 me-2"
+                           :class="activeTab === 'planos_contas'
+                                ? 'text-blue-600 dark:text-blue-500'
+                                : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'"></i>
+                        Planos de Contas
+                    </button>
+                </li>
+                <li class="me-2">
+                    <button @click="activeTab = 'acumuladores'"
+                            :class="activeTab === 'acumuladores'
+                                ? 'text-blue-600 border-blue-600 dark:text-blue-500 dark:border-blue-500'
+                                : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'"
+                            class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group">
+                        <i data-feather="archive" class="w-4 h-4 me-2"
+                           :class="activeTab === 'acumuladores'
+                                ? 'text-blue-600 dark:text-blue-500'
+                                : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-300'"></i>
+                        Acumuladores
+                    </button>
+                </li>
+            </ul>
         </div>
 
         {# --- Seção de Fornecedores --- #}
