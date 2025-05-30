@@ -1,0 +1,263 @@
+{% extends 'sync/base.html' %}
+{% load static %}
+
+{% block title %}Logs da Aplicação{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8" x-data="applicationLogsPage()">
+    <h1 class="text-3xl font-bold mb-6 text-gray-800">Logs da Aplicação</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div 
+                class="p-4 mb-4 text-sm rounded-lg 
+                {% if message.tags == 'success' %} bg-green-100 text-green-700 {% endif %}
+                {% if message.tags == 'warning' %} bg-yellow-100 text-yellow-700 {% endif %}
+                {% if message.tags == 'error' %} bg-red-100 text-red-700 {% endif %}
+                {% if message.tags == 'info' %} bg-blue-100 text-blue-700 {% endif %}"
+                role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Seção de Filtros -->
+    <form method="get" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
+            <div>
+                <label for="log_level" class="block text-gray-700 text-sm font-bold mb-2">Nível do Log:</label>
+                <select name="log_level" id="log_level" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <option value="">Todos os Níveis</option>
+                    {% for level_val, level_display in log_level_choices %}
+                        <option value="{{ level_val }}" {% if level_val == current_log_level %}selected{% endif %}>{{ level_display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="message_contains" class="block text-gray-700 text-sm font-bold mb-2">Mensagem Contém:</label>
+                <input type="text" name="message_contains" id="message_contains" value="{{ current_message_contains|default:'' }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div>
+                <label for="module_filter" class="block text-gray-700 text-sm font-bold mb-2">Módulo Contém:</label>
+                <input type="text" name="module_filter" id="module_filter" value="{{ current_module_filter|default:'' }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div>
+                <label for="func_name_filter" class="block text-gray-700 text-sm font-bold mb-2">Função Contém:</label>
+                <input type="text" name="func_name_filter" id="func_name_filter" value="{{ current_func_name_filter|default:'' }}" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                <i class="fas fa-filter mr-2"></i>Filtrar
+            </button>
+            <a href="{% url 'sync_logs' %}" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
+                Limpar Filtros
+            </a>
+        </div>
+    </form>
+
+    <!-- Ações em Lote -->
+    <div class="mb-6 flex justify-end">
+        <button @click="confirmDeleteAllLogs()" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+            <i class="fas fa-trash-alt mr-2"></i>Excluir Todos os Logs
+        </button>
+    </div>
+
+    <!-- Tabela de Logs -->
+    <div class="bg-white shadow-md rounded overflow-x-auto">
+        <table class="min-w-full leading-normal">
+            <thead>
+                <tr>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Timestamp</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Nível</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Módulo</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Função</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Linha</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Mensagem</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm whitespace-nowrap">{{ log.timestamp|date:"d/m/Y H:i:s" }}</td>
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            {% if log.level == 'DEBUG' %} bg-gray-200 text-gray-800 
+                            {% elif log.level == 'INFO' %} bg-blue-200 text-blue-800 
+                            {% elif log.level == 'WARNING' %} bg-yellow-200 text-yellow-800 
+                            {% elif log.level == 'ERROR' %} bg-red-200 text-red-800 
+                            {% elif log.level == 'CRITICAL' %} bg-pink-200 text-pink-800 
+                            {% endif %}">
+                            {{ log.get_level_display }}
+                        </span>
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm">{{ log.module }}</td>
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm">{{ log.func_name|default:"-" }}</td>
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm">{{ log.line_no|default:"-" }}</td>
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm">
+                        <span class="cursor-pointer text-blue-600 hover:text-blue-800" @click="openLogDetailsModal({{ log.id }}, `{{ log.message|escapejs }}`, `{{ log.traceback|escapejs|default:'' }}`)">
+                            {{ log.message|truncatechars:100 }}
+                        </span>
+                    </td>
+                    <td class="px-5 py-4 border-b border-gray-200 bg-white text-sm whitespace-nowrap">
+                        <button @click="confirmDeleteLog({{ log.id }})" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        <button @click="openLogDetailsModal({{ log.id }}, `{{ log.message|escapejs }}`, `{{ log.traceback|escapejs|default:'' }}`)" class="ml-2 text-blue-500 hover:text-blue-700" title="Ver Detalhes">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-10 text-gray-500">
+                        Nenhum log encontrado com os filtros atuais.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginação -->
+    {% if is_paginated %}
+    <div class="py-8">
+        <nav class="block">
+            <ul class="flex pl-0 rounded list-none flex-wrap">
+                {% if page_obj.has_previous %}
+                    <li><a href="?{% if other_query_params %}{{ other_query_params }}&{% endif %}page=1" class="first:ml-0 text-xs font-semibold flex w-8 h-8 mx-1 p-0 items-center justify-center leading-tight relative border border-solid border-blue-500 bg-white text-blue-500 rounded-md hover:bg-blue-100">Primeira</a></li>
+                    <li><a href="?{% if other_query_params %}{{ other_query_params }}&{% endif %}page={{ page_obj.previous_page_number }}" class="first:ml-0 text-xs font-semibold flex w-8 h-8 mx-1 p-0 items-center justify-center leading-tight relative border border-solid border-blue-500 bg-white text-blue-500 rounded-md hover:bg-blue-100">&laquo;</a></li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <li><a href="#" class="first:ml-0 text-xs font-semibold flex w-8 h-8 mx-1 p-0 items-center justify-center leading-tight relative border border-solid border-blue-500 bg-blue-500 text-white rounded-md">{{ num }}</a></li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li><a href="?{% if other_query_params %}{{ other_query_params }}&{% endif %}page={{ num }}" class="first:ml-0 text-xs font-semibold flex w-8 h-8 mx-1 p-0 items-center justify-center leading-tight relative border border-solid border-blue-500 bg-white text-blue-500 rounded-md hover:bg-blue-100">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li><a href="?{% if other_query_params %}{{ other_query_params }}&{% endif %}page={{ page_obj.next_page_number }}" class="first:ml-0 text-xs font-semibold flex w-8 h-8 mx-1 p-0 items-center justify-center leading-tight relative border border-solid border-blue-500 bg-white text-blue-500 rounded-md hover:bg-blue-100">&raquo;</a></li>
+                    <li><a href="?{% if other_query_params %}{{ other_query_params }}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="first:ml-0 text-xs font-semibold flex w-8 h-8 mx-1 p-0 items-center justify-center leading-tight relative border border-solid border-blue-500 bg-white text-blue-500 rounded-md hover:bg-blue-100">Última</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        <p class="text-sm text-gray-600 mt-2">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}. ({{ page_obj.paginator.count }} logs no total)
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Formulários ocultos para exclusão -->
+    <form x-ref="deleteLogForm" method="post" class="hidden">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_log">
+        <input type="hidden" name="log_id" :value="logIdToDelete">
+    </form>
+
+    <form x-ref="deleteAllLogsForm" method="post" class="hidden">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_all_logs">
+        <input type="hidden" name="confirm_delete_all_flag" value="true">
+    </form>
+
+    <!-- Modal para Traceback/Mensagem Completa -->
+    <div x-show="showLogDetailsModal" @keydown.escape.window="showLogDetailsModal = false" @click.away="showLogDetailsModal = false" 
+         x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" 
+         x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" 
+         class="fixed inset-0 bg-gray-800 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center z-50 px-4" style="display: none;">
+        <div class="bg-white p-6 sm:p-8 rounded-lg shadow-xl w-full max-w-3xl mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-semibold text-gray-800">Detalhes do Log</h3>
+                <button @click="showLogDetailsModal = false" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6">
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <h4 class="font-semibold text-gray-700">Mensagem Completa:</h4>
+                        <button @click="copyToClipboard(currentMessage, 'Mensagem')" class="text-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-3 rounded focus:outline-none focus:shadow-outline flex items-center">
+                            <i class="fas fa-copy mr-1"></i> Copiar
+                        </button>
+                    </div>
+                    <p class="text-gray-800 whitespace-pre-wrap bg-gray-50 p-4 rounded border border-gray-200 max-h-60 overflow-y-auto text-sm" x-text="currentMessage"></p>
+                </div>
+
+                <template x-if="currentTraceback && currentTraceback.trim() !== ''">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <h4 class="font-semibold text-gray-700">Traceback:</h4>
+                            <button @click="copyToClipboard(currentTraceback, 'Traceback')" class="text-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-3 rounded focus:outline-none focus:shadow-outline flex items-center">
+                                <i class="fas fa-copy mr-1"></i> Copiar
+                            </button>
+                        </div>
+                        <pre class="text-sm text-red-600 whitespace-pre-wrap bg-gray-50 p-4 rounded border border-gray-200 max-h-96 overflow-y-auto" x-text="currentTraceback"></pre>
+                    </div>
+                </template>
+                <template x-if="!currentTraceback || currentTraceback.trim() === ''">
+                    <p class="text-gray-500 italic">Nenhum traceback associado a este log.</p>
+                </template>
+            </div>
+
+            <div class="text-right mt-8">
+                <button @click="showLogDetailsModal = false" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('applicationLogsPage', () => ({
+        showLogDetailsModal: false,
+        currentTraceback: null,
+        currentMessage: '',
+        selectedLogId: null, // Apenas para referência, se necessário no futuro
+        logIdToDelete: null,
+
+        openLogDetailsModal(logId, message, traceback) {
+            this.selectedLogId = logId;
+            this.currentMessage = message;
+            this.currentTraceback = traceback.trim() ? traceback : null;
+            this.showLogDetailsModal = true;
+        },
+
+        confirmDeleteLog(logId) {
+            if (confirm('Tem certeza que deseja excluir este log? Esta ação não pode ser desfeita.')) {
+                this.logIdToDelete = logId;
+                this.$nextTick(() => {
+                    this.$refs.deleteLogForm.submit();
+                });
+            }
+        },
+
+        confirmDeleteAllLogs() {
+            if (confirm('TEM CERTEZA ABSOLUTA que deseja excluir TODOS os logs da aplicação? Esta ação é IRREVERSÍVEL e removerá todo o histórico de logs.')) {
+                if (confirm('Confirmação final: Esta ação deletará TODOS OS LOGS. Continuar?')) {
+                    this.$refs.deleteAllLogsForm.submit();
+                }
+            }
+        },
+
+        copyToClipboard(textToCopy, type) {
+            if (!textToCopy) return;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert(type + ' copiado para a área de transferência!');
+            }).catch(err => {
+                console.error('Falha ao copiar texto: ', err);
+                alert('Falha ao copiar ' + type + '. Verifique o console.');
+            });
+        }
+    }));
+});
+</script>
+{% endblock %} 

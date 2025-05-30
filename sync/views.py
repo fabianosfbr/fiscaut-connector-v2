@@ -1,7 +1,7 @@
 from django.shortcuts import render
 
 # from django.contrib.auth.models import User # Removida
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, ListView
 import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -15,7 +15,8 @@ from django.shortcuts import redirect
 from .models import (
     FiscautApiConfig,
     FornecedorStatusSincronizacao,
-)  # Adicionado FornecedorStatusSincronizacao
+    ApplicationLog,
+)  # Adicionado FornecedorStatusSincronizacao e ApplicationLog
 import requests  # Adicionar importação para a biblioteca requests
 from .services.fiscaut_api_service import (
     FiscautApiService,
@@ -26,6 +27,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from .tasks import processar_sincronizacao_fornecedor_task
+from django.urls import reverse_lazy
 
 logger = logging.getLogger(__name__)
 
@@ -345,41 +347,6 @@ class UsersView(TemplateView):
         return context
 
 
-class LogsView(TemplateView):
-    template_name = "sync/logs.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context.update(
-            {
-                "active_page": "logs",
-                "logs": [
-                    {
-                        "level": "info",
-                        "message": "Sincronização iniciada",
-                        "timestamp": "15/05/2025 16:30:00",
-                    },
-                    {
-                        "level": "success",
-                        "message": "Sincronização concluída com sucesso",
-                        "timestamp": "15/05/2025 16:42:15",
-                    },
-                    {
-                        "level": "warning",
-                        "message": "Conexão com o sistema externo instável",
-                        "timestamp": "15/05/2025 15:12:33",
-                    },
-                    {
-                        "level": "error",
-                        "message": "Falha na autenticação com o sistema externo",
-                        "timestamp": "14/05/2025 10:45:21",
-                    },
-                ],
-            }
-        )
-        return context
-
-
 class EmpresasListView(TemplateView):
     template_name = "sync/empresas.html"
     page_size = 50
@@ -573,6 +540,7 @@ class EmpresaDetailView(View):
 
     def get(self, request, codi_emp, *args, **kwargs):
         logger.info(f"Acessando detalhes da empresa com codi_emp: {codi_emp}")
+
 
         # Definição das classes MockPage e MockPaginator no escopo do método
         # TODO: Considerar mover para um local mais global se usadas em múltiplas views
@@ -849,19 +817,34 @@ def api_toggle_empresa_sincronizacao(request):
 def api_manage_fiscaut_config(request):
     """Gerencia a configuração da API Fiscaut."""
     if request.method == "GET":
-        config = FiscautApiConfig.get_active_config()
-        if config:
+        try:
+            config = FiscautApiConfig.get_active_config()
+            if config:
+                return JsonResponse(
+                    {
+                        "success": True,
+                        "api_url": config.api_url,
+                        "api_key": config.api_key,  # Lembre-se de que a chave está em texto plano
+                    }
+                )
+            else:
+                return JsonResponse(
+                    {"success": True, "api_url": "", "api_key": ""}, status=200
+                )
+        except Exception as e: # Captura ValueError e outras possíveis exceções do ORM
+            logger.error(f"Erro ao carregar configuração da API Fiscaut: {str(e)}", exc_info=True)
+            # Retorna uma resposta similar à de 'nenhuma configuração', mas pode-se adicionar um erro
+            # A imagem mostra "Erro ao carregar configuração: Internal Server Error"
+            # Vamos replicar isso, mas é importante que o frontend saiba lidar com essa mensagem.
             return JsonResponse(
                 {
-                    "success": True,
-                    "api_url": config.api_url,
-                    "api_key": config.api_key,  # Lembre-se de que a chave está em texto plano
-                }
+                    "success": False, # Indica que houve um problema
+                    "message": "Erro ao carregar configuração: Internal Server Error", # Mensagem de erro genérica
+                    "api_url": "",
+                    "api_key": "",
+                },
+                status=500 # Um erro 500 é mais apropriado aqui
             )
-        else:
-            return JsonResponse(
-                {"success": True, "api_url": "", "api_key": ""}, status=200
-            )  # Ou 404 se preferir que não encontrado seja um erro
 
     elif request.method == "POST":
         try:
@@ -1388,3 +1371,72 @@ class SincronizarFornecedoresLoteView(APIView):
                 {"success": False, "message": "Erro interno ao processar."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class ApplicationLogsView(ListView):
+    model = ApplicationLog
+    template_name = "sync/application_logs.html"
+    context_object_name = "logs"
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset().order_by('-timestamp')
+        log_level = self.request.GET.get('log_level', '')
+        message_contains = self.request.GET.get('message_contains', '')
+        module_filter = self.request.GET.get('module_filter', '')
+        func_name_filter = self.request.GET.get('func_name_filter', '')
+
+        if log_level:
+            queryset = queryset.filter(level=log_level)
+        if message_contains:
+            queryset = queryset.filter(message__icontains=message_contains)
+        if module_filter:
+            queryset = queryset.filter(module__icontains=module_filter)
+        if func_name_filter:
+            queryset = queryset.filter(func_name__icontains=func_name_filter)
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['log_level_choices'] = ApplicationLog.LEVEL_CHOICES
+        context['current_log_level'] = self.request.GET.get('log_level', '')
+        context['current_message_contains'] = self.request.GET.get('message_contains', '')
+        context['current_module_filter'] = self.request.GET.get('module_filter', '')
+        context['current_func_name_filter'] = self.request.GET.get('func_name_filter', '')
+        context['active_page'] = "logs"
+
+        # Preparar query string para paginação, excluindo o parâmetro 'page'
+        query_params = self.request.GET.copy()
+        if 'page' in query_params:
+            del query_params['page']
+        context['other_query_params'] = query_params.urlencode()
+        
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action')
+        log_id_to_delete = request.POST.get('log_id')
+
+        if action == 'delete_log' and log_id_to_delete:
+            try:
+                log_entry = ApplicationLog.objects.get(pk=log_id_to_delete)
+                log_entry.delete()
+                messages.success(request, f"Log ID {log_id_to_delete} excluído com sucesso.")
+            except ApplicationLog.DoesNotExist:
+                messages.error(request, f"Log ID {log_id_to_delete} não encontrado.")
+            except Exception as e:
+                messages.error(request, f"Erro ao excluir log ID {log_id_to_delete}: {e}")
+        
+        elif action == 'delete_all_logs': 
+            try:
+                ApplicationLog.objects.all().delete()
+                messages.success(request, "Todos os logs da aplicação foram excluídos com sucesso.")
+            except Exception as e:
+                messages.error(request, f"Erro ao excluir todos os logs: {e}")
+
+        query_params = request.GET.urlencode()
+        redirect_url = reverse_lazy('sync_logs')
+        if query_params:
+            return redirect(f"{redirect_url}?{query_params}")
+        return redirect(redirect_url)

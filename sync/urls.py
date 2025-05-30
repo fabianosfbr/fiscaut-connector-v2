@@ -15,7 +15,6 @@ urlpatterns = [
     # URLs das páginas principais
     path("dashboard/", views.DashboardView.as_view(), name="sync_dashboard"),
     path("users/", views.UsersView.as_view(), name="sync_users"),
-    path("logs/", views.LogsView.as_view(), name="sync_logs"),
     path("empresas/", views.EmpresasListView.as_view(), name="sync_empresas_list"),
     # Adicionar outras URLs do app sync aqui conforme necessário
     path(
@@ -46,13 +45,14 @@ urlpatterns = [
         name="sync_api_sincronizar_fornecedor_empresa",
     ),
     path(
-        "api/config/odbc/get/",
-        views.GetOdbcConfigView.as_view(),
-        name="sync_api_get_odbc_config",
-    ),
-    path(
         "api/empresas/sincronizar-lote/",
         views.SincronizarFornecedoresLoteView.as_view(),
         name="sync_api_sincronizar_fornecedores_lote",
+    ),
+    # Logs da Aplicação - AGORA EM /logs/
+    path(
+        "logs/",
+        views.ApplicationLogsView.as_view(),
+        name="sync_logs",
     ),
 ]
