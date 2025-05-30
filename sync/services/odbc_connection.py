@@ -754,7 +754,7 @@ class ODBCConnectionManager:
             filters=filters,
             page_number=page_number,
             page_size=page_size,
-            source_table_name="bethadba.efacumuladorese",
+            source_table_name="bethadba.efacumuladores",
             fields_to_select_str="CODI_ACU, NOME_ACU, DESCRICAO_ACU",
             default_order_by_field="CODI_ACU",
             id_field_filter_name="f_codi_acu",

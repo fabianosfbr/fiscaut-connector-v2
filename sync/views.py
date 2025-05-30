@@ -746,6 +746,264 @@ class EmpresaDetailView(View):
         )
         # --- Fim da Lógica para Fornecedores ---
 
+        # --- Início da Lógica para Clientes ---
+        cliente_page_size = 50
+        current_c_codi_cli = request.GET.get("c_codi_cli", None)
+        current_c_nome_cli = request.GET.get("c_nome_cli", None)
+        current_c_cgce_cli = request.GET.get("c_cgce_cli", None)
+        c_page_number = request.GET.get("c_page", 1)
+        try:
+            c_page_number = int(c_page_number)
+            if c_page_number < 1:
+                c_page_number = 1
+        except ValueError:
+            c_page_number = 1
+
+        cliente_filters = {}
+        if current_c_codi_cli:
+            cliente_filters["f_codi_cli"] = current_c_codi_cli
+        if current_c_nome_cli:
+            cliente_filters["f_nome_cli"] = current_c_nome_cli
+        if current_c_cgce_cli:
+            cliente_filters["f_cgce_cli"] = current_c_cgce_cli
+
+        logger.debug(
+            f"Buscando clientes para empresa {codi_emp} com filtros ODBC: {cliente_filters}, página: {c_page_number}"
+        )
+
+        clientes_result = odbc_manager.list_clientes_empresa(
+            codi_emp=codi_emp,
+            filters=cliente_filters,
+            page_number=c_page_number,
+            page_size=cliente_page_size,
+        )
+
+        clientes_list = []
+        clientes_total_records_odbc = 0
+        clientes_total_pages_odbc = 0
+
+        if clientes_result.get("error"):
+            messages.error(
+                request, f"Erro ao buscar clientes: {clientes_result['error']}"
+            )
+        else:
+            clientes_list = clientes_result.get("data", [])
+            clientes_total_records_odbc = clientes_result.get("total_records", 0)
+            clientes_total_pages_odbc = clientes_result.get("total_pages", 0)
+
+        clientes_paginator = MockPaginator(
+            count=clientes_total_records_odbc,
+            num_pages=clientes_total_pages_odbc,
+            page_range=range(
+                1,
+                (
+                    clientes_total_pages_odbc + 1
+                    if clientes_total_pages_odbc > 0
+                    else 2
+                ),
+            ),
+        )
+        clientes_page_obj = MockPage(
+            number=c_page_number,
+            paginator_instance=clientes_paginator,
+            object_list=clientes_list,
+            has_next=(c_page_number < clientes_total_pages_odbc),
+            has_previous=(c_page_number > 1),
+            start_index=(
+                ((c_page_number - 1) * cliente_page_size + 1)
+                if clientes_list
+                else 0
+            ),
+            end_index=(
+                ((c_page_number - 1) * cliente_page_size + len(clientes_list))
+                if clientes_list
+                else 0
+            ),
+        )
+
+        context["clientes_list"] = clientes_list
+        context["clientes_page_obj"] = clientes_page_obj
+        context["current_c_codi_cli"] = current_c_codi_cli
+        context["current_c_nome_cli"] = current_c_nome_cli
+        context["current_c_cgce_cli"] = current_c_cgce_cli
+        # --- Fim da Lógica para Clientes ---
+
+        # --- Início da Lógica para Planos de Contas ---
+        plano_contas_page_size = 50
+        current_pc_codi_cta = request.GET.get("pc_codi_cta", None)
+        current_pc_nome_cta = request.GET.get("pc_nome_cta", None)
+        current_pc_clas_cta = request.GET.get("pc_clas_cta", None)
+        pc_page_number = request.GET.get("pc_page", 1)
+        try:
+            pc_page_number = int(pc_page_number)
+            if pc_page_number < 1:
+                pc_page_number = 1
+        except ValueError:
+            pc_page_number = 1
+
+        plano_contas_filters = {}
+        if current_pc_codi_cta:
+            plano_contas_filters["f_codi_cta"] = current_pc_codi_cta
+        if current_pc_nome_cta:
+            plano_contas_filters["f_nome_cta"] = current_pc_nome_cta
+        if current_pc_clas_cta:
+            plano_contas_filters["f_clas_cta"] = current_pc_clas_cta
+
+        logger.debug(
+            f"Buscando planos de contas para empresa {codi_emp} com filtros ODBC: {plano_contas_filters}, página: {pc_page_number}"
+        )
+
+        plano_contas_result = odbc_manager.list_plano_de_contas_empresa(
+            codi_emp=codi_emp,
+            filters=plano_contas_filters,
+            page_number=pc_page_number,
+            page_size=plano_contas_page_size,
+        )
+
+        plano_contas_list = []
+        plano_contas_total_records_odbc = 0
+        plano_contas_total_pages_odbc = 0
+
+        if plano_contas_result.get("error"):
+            messages.error(
+                request,
+                f"Erro ao buscar planos de contas: {plano_contas_result['error']}",
+            )
+        else:
+            plano_contas_list = plano_contas_result.get("data", [])
+            plano_contas_total_records_odbc = plano_contas_result.get(
+                "total_records", 0
+            )
+            plano_contas_total_pages_odbc = plano_contas_result.get("total_pages", 0)
+
+        plano_contas_paginator = MockPaginator(
+            count=plano_contas_total_records_odbc,
+            num_pages=plano_contas_total_pages_odbc,
+            page_range=range(
+                1,
+                (
+                    plano_contas_total_pages_odbc + 1
+                    if plano_contas_total_pages_odbc > 0
+                    else 2
+                ),
+            ),
+        )
+        plano_contas_page_obj = MockPage(
+            number=pc_page_number,
+            paginator_instance=plano_contas_paginator,
+            object_list=plano_contas_list,
+            has_next=(pc_page_number < plano_contas_total_pages_odbc),
+            has_previous=(pc_page_number > 1),
+            start_index=(
+                ((pc_page_number - 1) * plano_contas_page_size + 1)
+                if plano_contas_list
+                else 0
+            ),
+            end_index=(
+                (
+                    (pc_page_number - 1) * plano_contas_page_size
+                    + len(plano_contas_list)
+                )
+                if plano_contas_list
+                else 0
+            ),
+        )
+
+        context["plano_contas_list"] = plano_contas_list
+        context["plano_contas_page_obj"] = plano_contas_page_obj
+        context["current_pc_codi_cta"] = current_pc_codi_cta
+        context["current_pc_nome_cta"] = current_pc_nome_cta
+        context["current_pc_clas_cta"] = current_pc_clas_cta
+        # --- Fim da Lógica para Planos de Contas ---
+
+        # --- Início da Lógica para Acumuladores ---
+        acumuladores_page_size = 50
+        current_ac_codi_acu = request.GET.get("ac_codi_acu", None)
+        current_ac_nome_acu = request.GET.get("ac_nome_acu", None)
+        current_ac_descricao_acu = request.GET.get("ac_descricao_acu", None)
+        ac_page_number = request.GET.get("ac_page", 1)
+        try:
+            ac_page_number = int(ac_page_number)
+            if ac_page_number < 1:
+                ac_page_number = 1
+        except ValueError:
+            ac_page_number = 1
+
+        acumuladores_filters = {}
+        if current_ac_codi_acu:
+            acumuladores_filters["f_codi_acu"] = current_ac_codi_acu
+        if current_ac_nome_acu:
+            acumuladores_filters["f_nome_acu"] = current_ac_nome_acu
+        if current_ac_descricao_acu:
+            acumuladores_filters["f_descricao_acu"] = current_ac_descricao_acu
+
+        logger.debug(
+            f"Buscando acumuladores para empresa {codi_emp} com filtros ODBC: {acumuladores_filters}, página: {ac_page_number}"
+        )
+
+        acumuladores_result = odbc_manager.list_acumuladores_empresa(
+            codi_emp=codi_emp,
+            filters=acumuladores_filters,
+            page_number=ac_page_number,
+            page_size=acumuladores_page_size,
+        )
+
+        acumuladores_list = []
+        acumuladores_total_records_odbc = 0
+        acumuladores_total_pages_odbc = 0
+
+        if acumuladores_result.get("error"):
+            messages.error(
+                request,
+                f"Erro ao buscar acumuladores: {acumuladores_result['error']}",
+            )
+        else:
+            acumuladores_list = acumuladores_result.get("data", [])
+            acumuladores_total_records_odbc = acumuladores_result.get(
+                "total_records", 0
+            )
+            acumuladores_total_pages_odbc = acumuladores_result.get("total_pages", 0)
+
+        acumuladores_paginator = MockPaginator(
+            count=acumuladores_total_records_odbc,
+            num_pages=acumuladores_total_pages_odbc,
+            page_range=range(
+                1,
+                (
+                    acumuladores_total_pages_odbc + 1
+                    if acumuladores_total_pages_odbc > 0
+                    else 2
+                ),
+            ),
+        )
+        acumuladores_page_obj = MockPage(
+            number=ac_page_number,
+            paginator_instance=acumuladores_paginator,
+            object_list=acumuladores_list,
+            has_next=(ac_page_number < acumuladores_total_pages_odbc),
+            has_previous=(ac_page_number > 1),
+            start_index=(
+                ((ac_page_number - 1) * acumuladores_page_size + 1)
+                if acumuladores_list
+                else 0
+            ),
+            end_index=(
+                (
+                    (ac_page_number - 1) * acumuladores_page_size
+                    + len(acumuladores_list)
+                )
+                if acumuladores_list
+                else 0
+            ),
+        )
+
+        context["acumuladores_list"] = acumuladores_list
+        context["acumuladores_page_obj"] = acumuladores_page_obj
+        context["current_ac_codi_acu"] = current_ac_codi_acu
+        context["current_ac_nome_acu"] = current_ac_nome_acu
+        context["current_ac_descricao_acu"] = current_ac_descricao_acu
+        # --- Fim da Lógica para Acumuladores ---
+
         return render(request, self.template_name, context)
 
 
