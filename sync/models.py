@@ -13,7 +13,9 @@ class ODBCConfiguration(models.Model):
     suporta múltiplas configurações caso necessário no futuro.
     """
 
-    dsn = models.CharField(_("Nome da Fonte de Dados (DSN)"), max_length=255, unique=True)
+    dsn = models.CharField(
+        _("Nome da Fonte de Dados (DSN)"), max_length=255, unique=True
+    )
     uid = models.CharField(_("Usuário (UID)"), max_length=255)
     pwd = models.CharField(_("Senha (PWD)"), max_length=255)
     driver = models.CharField(_("Driver ODBC"), max_length=255, blank=True, null=True)
@@ -78,7 +80,10 @@ class EmpresaSincronizacao(models.Model):
         ),
     )
     ultima_sincronizacao = models.DateTimeField(
-        _("Última Sincronização"), null=True, blank=True, help_text="Data e hora da última sincronização bem-sucedida."
+        _("Última Sincronização"),
+        null=True,
+        blank=True,
+        help_text="Data e hora da última sincronização bem-sucedida.",
     )
     created_at = models.DateTimeField(_("Criado em"), auto_now_add=True)
     updated_at = models.DateTimeField(_("Atualizado em"), auto_now=True)
@@ -123,7 +128,7 @@ class FiscautApiConfig(models.Model):
     class Meta:
         verbose_name = "Configuração da API Fiscaut"
         verbose_name_plural = "Configurações da API Fiscaut"
-        ordering = ['-is_active', '-updated_at']
+        ordering = ["-is_active", "-updated_at"]
 
     @classmethod
     def get_active_config(cls):
@@ -162,16 +167,16 @@ class FiscautApiConfig(models.Model):
 
 # Novo Modelo para Status de Sincronização de Fornecedor
 class FornecedorStatusSincronizacao(models.Model):
-    STATUS_NAO_SINCRONIZADO = 'NAO_SINCRONIZADO'
-    STATUS_SINCRONIZADO = 'SINCRONIZADO'
-    STATUS_ERRO = 'ERRO'
-    STATUS_EM_ANDAMENTO = 'EM_ANDAMENTO' # Novo status
+    STATUS_NAO_SINCRONIZADO = "NAO_SINCRONIZADO"
+    STATUS_SINCRONIZADO = "SINCRONIZADO"
+    STATUS_ERRO = "ERRO"
+    STATUS_EM_ANDAMENTO = "EM_ANDAMENTO"  # Novo status
 
     STATUS_CHOICES = [
-        (STATUS_NAO_SINCRONIZADO, 'Não Sincronizado'),
-        (STATUS_SINCRONIZADO, 'Sincronizado'),
-        (STATUS_ERRO, 'Erro na Sincronização'),
-        (STATUS_EM_ANDAMENTO, 'Sincronização em Andamento'), # Novo status
+        (STATUS_NAO_SINCRONIZADO, "Não Sincronizado"),
+        (STATUS_SINCRONIZADO, "Sincronizado"),
+        (STATUS_ERRO, "Erro na Sincronização"),
+        (STATUS_EM_ANDAMENTO, "Sincronização em Andamento"),  # Novo status
     ]
 
     codi_emp_odbc = models.IntegerField(_("Código da Empresa ODBC"))
@@ -194,7 +199,10 @@ class FornecedorStatusSincronizacao(models.Model):
     )
     # Opcional: ID do fornecedor no sistema Fiscaut, se retornado e útil.
     fiscaut_id = models.CharField(
-        max_length=100, null=True, blank=True, help_text="ID do fornecedor na API Fiscaut após sincronização bem-sucedida."
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="ID do fornecedor na API Fiscaut após sincronização bem-sucedida.",
     )
 
     class Meta:
@@ -203,8 +211,8 @@ class FornecedorStatusSincronizacao(models.Model):
         unique_together = ("codi_emp_odbc", "codi_for_odbc")
         ordering = ["codi_emp_odbc", "codi_for_odbc"]
         indexes = [
-            models.Index(fields=['codi_emp_odbc', 'codi_for_odbc']),
-            models.Index(fields=['status_sincronizacao']),
+            models.Index(fields=["codi_emp_odbc", "codi_for_odbc"]),
+            models.Index(fields=["status_sincronizacao"]),
         ]
 
     def __str__(self):
@@ -255,20 +263,31 @@ class FornecedorStatusSincronizacao(models.Model):
 
 class ApplicationLog(models.Model):
     LEVEL_CHOICES = [
-        ('DEBUG', 'Debug'),
-        ('INFO', 'Info'),
-        ('WARNING', 'Warning'),
-        ('ERROR', 'Error'),
-        ('CRITICAL', 'Critical'),
+        ("DEBUG", "Debug"),
+        ("INFO", "Info"),
+        ("WARNING", "Warning"),
+        ("ERROR", "Error"),
+        ("CRITICAL", "Critical"),
     ]
 
     timestamp = models.DateTimeField(auto_now_add=True, help_text="Data e hora do log.")
-    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, help_text="Nível do log.")
+    level = models.CharField(
+        max_length=10, choices=LEVEL_CHOICES, help_text="Nível do log."
+    )
     module = models.CharField(max_length=255, help_text="Módulo onde o log foi gerado.")
-    func_name = models.CharField(max_length=255, blank=True, null=True, help_text="Nome da função onde o log foi gerado.")
-    line_no = models.PositiveIntegerField(blank=True, null=True, help_text="Número da linha onde o log foi gerado.")
+    func_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Nome da função onde o log foi gerado.",
+    )
+    line_no = models.PositiveIntegerField(
+        blank=True, null=True, help_text="Número da linha onde o log foi gerado."
+    )
     message = models.TextField(help_text="Mensagem do log.")
-    traceback = models.TextField(blank=True, null=True, help_text="Traceback do erro, se aplicável.")
+    traceback = models.TextField(
+        blank=True, null=True, help_text="Traceback do erro, se aplicável."
+    )
 
     def __str__(self):
         return f"[{self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] [{self.level}] {self.module}: {self.message[:100]}"
@@ -276,9 +295,9 @@ class ApplicationLog(models.Model):
     class Meta:
         verbose_name = "Log da Aplicação"
         verbose_name_plural = "Logs da Aplicação"
-        ordering = ['-timestamp']
+        ordering = ["-timestamp"]
         indexes = [
-            models.Index(fields=['level']),
-            models.Index(fields=['module']),
-            models.Index(fields=['timestamp']),
+            models.Index(fields=["level"]),
+            models.Index(fields=["module"]),
+            models.Index(fields=["timestamp"]),
         ]

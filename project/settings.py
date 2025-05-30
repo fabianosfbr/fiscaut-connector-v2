@@ -120,46 +120,46 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGGING_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(pathname)s:%(lineno)d %(funcName)s "%(message)s"',
-            'datefmt': LOGGING_DATE_FORMAT,
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(pathname)s:%(lineno)d %(funcName)s "%(message)s"',
+            "datefmt": LOGGING_DATE_FORMAT,
         },
-        'simple': {
-            'format': '%(levelname)s %(asctime)s %(module)s "%(message)s"',
-            'datefmt': LOGGING_DATE_FORMAT,
+        "simple": {
+            "format": '%(levelname)s %(asctime)s %(module)s "%(message)s"',
+            "datefmt": LOGGING_DATE_FORMAT,
         },
-        'db_formatter': {
-            'format': '%(message)s',
-        }
-    },
-    'handlers': {
-        'db_log': {
-            'level': 'INFO',
-            'class': 'sync.log_handlers.DatabaseLogHandler',
-        },
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
+        "db_formatter": {
+            "format": "%(message)s",
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'db_log'],
-            'level': 'INFO',
-            'propagate': True,
+    "handlers": {
+        "db_log": {
+            "level": "INFO",
+            "class": "sync.log_handlers.DatabaseLogHandler",
         },
-        'sync': {
-            'handlers': ['console', 'db_log'],
-            'level': 'DEBUG',
-            'propagate': False,
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
     },
-    'root': {
-        'handlers': ['console', 'db_log'],
-        'level': 'INFO',
+    "loggers": {
+        "django": {
+            "handlers": ["console", "db_log"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "sync": {
+            "handlers": ["console", "db_log"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["console", "db_log"],
+        "level": "INFO",
     },
 }

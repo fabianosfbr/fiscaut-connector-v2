@@ -541,7 +541,6 @@ class EmpresaDetailView(View):
     def get(self, request, codi_emp, *args, **kwargs):
         logger.info(f"Acessando detalhes da empresa com codi_emp: {codi_emp}")
 
-
         # Definição das classes MockPage e MockPaginator no escopo do método
         # TODO: Considerar mover para um local mais global se usadas em múltiplas views
         class MockPage:
@@ -617,9 +616,11 @@ class EmpresaDetailView(View):
             other_params_list_f.append(f"f_cgce_for={current_f_cgce_for}")
         if current_f_status_sinc and current_f_status_sinc != "todos":
             other_params_list_f.append(f"f_status_sinc={current_f_status_sinc}")
-        
-        other_params_f_str = "&" + "&".join(other_params_list_f) if other_params_list_f else ""
-        context['other_params_f'] = other_params_f_str
+
+        other_params_f_str = (
+            "&" + "&".join(other_params_list_f) if other_params_list_f else ""
+        )
+        context["other_params_f"] = other_params_f_str
 
         logger.debug(
             f"Buscando fornecedores para empresa {codi_emp} com filtros ODBC: {fornecedor_filters}, página: {f_page_number}, filtro status sinc: {current_f_status_sinc}"
@@ -789,9 +790,11 @@ class EmpresaDetailView(View):
             other_params_list_c.append(f"c_nome_cli={current_c_nome_cli}")
         if current_c_cgce_cli:
             other_params_list_c.append(f"c_cgce_cli={current_c_cgce_cli}")
-        
-        other_params_c_str = "&" + "&".join(other_params_list_c) if other_params_list_c else ""
-        context['other_params_c'] = other_params_c_str
+
+        other_params_c_str = (
+            "&" + "&".join(other_params_list_c) if other_params_list_c else ""
+        )
+        context["other_params_c"] = other_params_c_str
 
         logger.debug(
             f"Buscando clientes para empresa {codi_emp} com filtros ODBC: {cliente_filters}, página: {c_page_number}"
@@ -822,11 +825,7 @@ class EmpresaDetailView(View):
             num_pages=clientes_total_pages_odbc,
             page_range=range(
                 1,
-                (
-                    clientes_total_pages_odbc + 1
-                    if clientes_total_pages_odbc > 0
-                    else 2
-                ),
+                (clientes_total_pages_odbc + 1 if clientes_total_pages_odbc > 0 else 2),
             ),
         )
         clientes_page_obj = MockPage(
@@ -836,9 +835,7 @@ class EmpresaDetailView(View):
             has_next=(c_page_number < clientes_total_pages_odbc),
             has_previous=(c_page_number > 1),
             start_index=(
-                ((c_page_number - 1) * cliente_page_size + 1)
-                if clientes_list
-                else 0
+                ((c_page_number - 1) * cliente_page_size + 1) if clientes_list else 0
             ),
             end_index=(
                 ((c_page_number - 1) * cliente_page_size + len(clientes_list))
@@ -883,9 +880,11 @@ class EmpresaDetailView(View):
             other_params_list_pc.append(f"pc_nome_cta={current_pc_nome_cta}")
         if current_pc_clas_cta:
             other_params_list_pc.append(f"pc_clas_cta={current_pc_clas_cta}")
-        
-        other_params_pc_str = "&" + "&".join(other_params_list_pc) if other_params_list_pc else ""
-        context['other_params_pc'] = other_params_pc_str
+
+        other_params_pc_str = (
+            "&" + "&".join(other_params_list_pc) if other_params_list_pc else ""
+        )
+        context["other_params_pc"] = other_params_pc_str
 
         logger.debug(
             f"Buscando planos de contas para empresa {codi_emp} com filtros ODBC: {plano_contas_filters}, página: {pc_page_number}"
@@ -938,10 +937,7 @@ class EmpresaDetailView(View):
                 else 0
             ),
             end_index=(
-                (
-                    (pc_page_number - 1) * plano_contas_page_size
-                    + len(plano_contas_list)
-                )
+                ((pc_page_number - 1) * plano_contas_page_size + len(plano_contas_list))
                 if plano_contas_list
                 else 0
             ),
@@ -983,9 +979,11 @@ class EmpresaDetailView(View):
             other_params_list_ac.append(f"ac_nome_acu={current_ac_nome_acu}")
         if current_ac_descricao_acu:
             other_params_list_ac.append(f"ac_descricao_acu={current_ac_descricao_acu}")
-        
-        other_params_ac_str = "&" + "&".join(other_params_list_ac) if other_params_list_ac else ""
-        context['other_params_ac'] = other_params_ac_str
+
+        other_params_ac_str = (
+            "&" + "&".join(other_params_list_ac) if other_params_list_ac else ""
+        )
+        context["other_params_ac"] = other_params_ac_str
 
         logger.debug(
             f"Buscando acumuladores para empresa {codi_emp} com filtros ODBC: {acumuladores_filters}, página: {ac_page_number}"
@@ -1038,10 +1036,7 @@ class EmpresaDetailView(View):
                 else 0
             ),
             end_index=(
-                (
-                    (ac_page_number - 1) * acumuladores_page_size
-                    + len(acumuladores_list)
-                )
+                ((ac_page_number - 1) * acumuladores_page_size + len(acumuladores_list))
                 if acumuladores_list
                 else 0
             ),
@@ -1139,19 +1134,21 @@ def api_manage_fiscaut_config(request):
                 return JsonResponse(
                     {"success": True, "api_url": "", "api_key": ""}, status=200
                 )
-        except Exception as e: # Captura ValueError e outras possíveis exceções do ORM
-            logger.error(f"Erro ao carregar configuração da API Fiscaut: {str(e)}", exc_info=True)
+        except Exception as e:  # Captura ValueError e outras possíveis exceções do ORM
+            logger.error(
+                f"Erro ao carregar configuração da API Fiscaut: {str(e)}", exc_info=True
+            )
             # Retorna uma resposta similar à de 'nenhuma configuração', mas pode-se adicionar um erro
             # A imagem mostra "Erro ao carregar configuração: Internal Server Error"
             # Vamos replicar isso, mas é importante que o frontend saiba lidar com essa mensagem.
             return JsonResponse(
                 {
-                    "success": False, # Indica que houve um problema
-                    "message": "Erro ao carregar configuração: Internal Server Error", # Mensagem de erro genérica
+                    "success": False,  # Indica que houve um problema
+                    "message": "Erro ao carregar configuração: Internal Server Error",  # Mensagem de erro genérica
                     "api_url": "",
                     "api_key": "",
                 },
-                status=500 # Um erro 500 é mais apropriado aqui
+                status=500,  # Um erro 500 é mais apropriado aqui
             )
 
     elif request.method == "POST":
@@ -1547,15 +1544,22 @@ class SincronizarFornecedoresLoteView(APIView):
         try:
             # 1. Obter detalhes da empresa (CNPJ) do ODBC via serviço
             detalhes_empresa_odbc = empresa_sinc_service.get_detalhes_empresa(codi_emp)
-            
+
             if not detalhes_empresa_odbc or not detalhes_empresa_odbc.get("cgce_emp"):
-                logger.warning(f"Não foi possível obter detalhes (CNPJ) da empresa ODBC {codi_emp} para sincronização em lote.")
+                logger.warning(
+                    f"Não foi possível obter detalhes (CNPJ) da empresa ODBC {codi_emp} para sincronização em lote."
+                )
                 return Response(
-                    {"success": False, "message": f"Não foi possível obter CNPJ para a empresa {codi_emp} via ODBC. Verifique se a empresa existe."},
+                    {
+                        "success": False,
+                        "message": f"Não foi possível obter CNPJ para a empresa {codi_emp} via ODBC. Verifique se a empresa existe.",
+                    },
                     status=status.HTTP_404_NOT_FOUND,
                 )
             cnpj_empresa_para_sinc = detalhes_empresa_odbc["cgce_emp"]
-            nome_empresa_para_log = detalhes_empresa_odbc.get("razao_emp", f"Empresa {codi_emp}")
+            nome_empresa_para_log = detalhes_empresa_odbc.get(
+                "razao_emp", f"Empresa {codi_emp}"
+            )
 
             logger.info(
                 f"Sinc. Lote: Iniciando busca de fornecedores para empresa {codi_emp} - {nome_empresa_para_log} (CNPJ: {cnpj_empresa_para_sinc})."
@@ -1564,82 +1568,122 @@ class SincronizarFornecedoresLoteView(APIView):
             # 2. Listar TODOS os fornecedores da empresa via ODBC, implementando paginação manual.
             todos_fornecedores_odbc_data_list = []
             page_number = 1
-            page_size_para_busca = 100 # Buscar em lotes de 100, ajuste conforme necessário
-            max_paginas_seguranca = 500 # Limite de segurança para evitar loops infinitos
+            page_size_para_busca = (
+                100  # Buscar em lotes de 100, ajuste conforme necessário
+            )
+            max_paginas_seguranca = (
+                500  # Limite de segurança para evitar loops infinitos
+            )
             paginas_buscadas = 0
 
             while paginas_buscadas < max_paginas_seguranca:
-                logger.debug(f"Sinc. Lote: Buscando fornecedores da empresa {codi_emp}, página {page_number}, tamanho {page_size_para_busca}")
+                logger.debug(
+                    f"Sinc. Lote: Buscando fornecedores da empresa {codi_emp}, página {page_number}, tamanho {page_size_para_busca}"
+                )
                 resultado_pagina_fornecedores = odbc_manager.list_fornecedores_empresa(
                     codi_emp=codi_emp,
-                    filters={}, # Sem filtros específicos para buscar todos
+                    filters={},  # Sem filtros específicos para buscar todos
                     page_number=page_number,
-                    page_size=page_size_para_busca
+                    page_size=page_size_para_busca,
                 )
 
                 if resultado_pagina_fornecedores.get("error"):
-                    error_msg = resultado_pagina_fornecedores.get('error')
-                    logger.error(f"Sinc. Lote: Erro ao buscar página {page_number} de fornecedores da empresa {codi_emp} via ODBC: {error_msg}")
+                    error_msg = resultado_pagina_fornecedores.get("error")
+                    logger.error(
+                        f"Sinc. Lote: Erro ao buscar página {page_number} de fornecedores da empresa {codi_emp} via ODBC: {error_msg}"
+                    )
                     return Response(
-                        {"success": False, "message": f"Erro ao buscar fornecedores (página {page_number}) para a empresa {codi_emp} via ODBC: {error_msg}"},
+                        {
+                            "success": False,
+                            "message": f"Erro ao buscar fornecedores (página {page_number}) para a empresa {codi_emp} via ODBC: {error_msg}",
+                        },
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
 
-                fornecedores_nesta_pagina = resultado_pagina_fornecedores.get("data", [])
-                
+                fornecedores_nesta_pagina = resultado_pagina_fornecedores.get(
+                    "data", []
+                )
+
                 if not fornecedores_nesta_pagina:
-                    logger.debug(f"Sinc. Lote: Página {page_number} não retornou fornecedores. Fim da busca para empresa {codi_emp}.")
-                    break 
-                
+                    logger.debug(
+                        f"Sinc. Lote: Página {page_number} não retornou fornecedores. Fim da busca para empresa {codi_emp}."
+                    )
+                    break
+
                 todos_fornecedores_odbc_data_list.extend(fornecedores_nesta_pagina)
-                logger.debug(f"Sinc. Lote: {len(fornecedores_nesta_pagina)} fornecedores adicionados da página {page_number}. Total parcial: {len(todos_fornecedores_odbc_data_list)}.")
-                
+                logger.debug(
+                    f"Sinc. Lote: {len(fornecedores_nesta_pagina)} fornecedores adicionados da página {page_number}. Total parcial: {len(todos_fornecedores_odbc_data_list)}."
+                )
+
                 if len(fornecedores_nesta_pagina) < page_size_para_busca:
-                    logger.debug(f"Sinc. Lote: Página {page_number} retornou menos que o page_size ({len(fornecedores_nesta_pagina)} < {page_size_para_busca}). Assumindo ser a última página.")
+                    logger.debug(
+                        f"Sinc. Lote: Página {page_number} retornou menos que o page_size ({len(fornecedores_nesta_pagina)} < {page_size_para_busca}). Assumindo ser a última página."
+                    )
                     break
 
                 page_number += 1
                 paginas_buscadas += 1
                 if paginas_buscadas >= max_paginas_seguranca:
-                    logger.warning(f"Sinc. Lote: Atingido o limite máximo de {max_paginas_seguranca} páginas buscadas para empresa {codi_emp}. Interrompendo busca.")
+                    logger.warning(
+                        f"Sinc. Lote: Atingido o limite máximo de {max_paginas_seguranca} páginas buscadas para empresa {codi_emp}. Interrompendo busca."
+                    )
                     break
-            
+
             if not todos_fornecedores_odbc_data_list:
-                logger.info(f"Sinc. Lote: Nenhum fornecedor encontrado para a empresa {codi_emp} ({nome_empresa_para_log}) via ODBC.")
+                logger.info(
+                    f"Sinc. Lote: Nenhum fornecedor encontrado para a empresa {codi_emp} ({nome_empresa_para_log}) via ODBC."
+                )
                 return Response(
-                    {"success": True, "message": f"Nenhum fornecedor encontrado para a empresa {codi_emp} ({nome_empresa_para_log}) para sincronizar."},
+                    {
+                        "success": True,
+                        "message": f"Nenhum fornecedor encontrado para a empresa {codi_emp} ({nome_empresa_para_log}) para sincronizar.",
+                    },
                     status=status.HTTP_200_OK,
                 )
 
-            logger.info(f"Sinc. Lote: {len(todos_fornecedores_odbc_data_list)} fornecedores encontrados via ODBC para empresa {codi_emp}. Verificando elegibilidade...")
+            logger.info(
+                f"Sinc. Lote: {len(todos_fornecedores_odbc_data_list)} fornecedores encontrados via ODBC para empresa {codi_emp}. Verificando elegibilidade..."
+            )
             contador_tarefas_enfileiradas = 0
 
             for fornecedor_data in todos_fornecedores_odbc_data_list:
                 codi_for_odbc = str(fornecedor_data.get("codi_for", "")).strip()
                 cnpj_fornecedor = str(fornecedor_data.get("cgce_for", "")).strip()
-                nome_fornecedor = str(fornecedor_data.get("razao_social", "") or fornecedor_data.get("nome_for", "")).strip()
-                conta_contabil_fornecedor = str(fornecedor_data.get("codi_cta", "") or fornecedor_data.get("conta_ctb", "")).strip()
+                nome_fornecedor = str(
+                    fornecedor_data.get("razao_social", "")
+                    or fornecedor_data.get("nome_for", "")
+                ).strip()
+                conta_contabil_fornecedor = str(
+                    fornecedor_data.get("codi_cta", "")
+                    or fornecedor_data.get("conta_ctb", "")
+                ).strip()
 
                 if not codi_for_odbc:
-                    logger.debug(f"Sinc. Lote: Fornecedor da empresa {codi_emp} ignorado (sem codi_for). Data: {fornecedor_data}")
+                    logger.debug(
+                        f"Sinc. Lote: Fornecedor da empresa {codi_emp} ignorado (sem codi_for). Data: {fornecedor_data}"
+                    )
                     continue
                 if not cnpj_fornecedor:
-                    logger.debug(f"Sinc. Lote: Fornecedor {codi_for_odbc} ({nome_fornecedor if nome_fornecedor else 'Nome não disponível'}) da empresa {codi_emp} ignorado (sem CNPJ).")
+                    logger.debug(
+                        f"Sinc. Lote: Fornecedor {codi_for_odbc} ({nome_fornecedor if nome_fornecedor else 'Nome não disponível'}) da empresa {codi_emp} ignorado (sem CNPJ)."
+                    )
                     continue
-                if not nome_fornecedor: 
-                    logger.debug(f"Sinc. Lote: Fornecedor {codi_for_odbc} (CNPJ: {cnpj_fornecedor}) da empresa {codi_emp} ignorado (sem nome).")
+                if not nome_fornecedor:
+                    logger.debug(
+                        f"Sinc. Lote: Fornecedor {codi_for_odbc} (CNPJ: {cnpj_fornecedor}) da empresa {codi_emp} ignorado (sem nome)."
+                    )
                     continue
 
                 status_valido_para_sinc = False
                 try:
                     status_obj = FornecedorStatusSincronizacao.objects.get(
-                        codi_emp_odbc=codi_emp, # codi_emp é int
-                        codi_for_odbc=codi_for_odbc, # codi_for_odbc é str
+                        codi_emp_odbc=codi_emp,  # codi_emp é int
+                        codi_for_odbc=codi_for_odbc,  # codi_for_odbc é str
                     )
                     if status_obj.status_sincronizacao in ["NAO_SINCRONIZADO", "ERRO"]:
                         status_valido_para_sinc = True
                 except FornecedorStatusSincronizacao.DoesNotExist:
-                    status_valido_para_sinc = True 
+                    status_valido_para_sinc = True
 
                 if status_valido_para_sinc:
                     logger.info(
@@ -1666,11 +1710,15 @@ class SincronizarFornecedoresLoteView(APIView):
             )
             logger.info(f"Sinc. Lote: Concluído para empresa {codi_emp}. {msg}")
             return Response(
-                {"success": True, "message": msg, "tarefas_enfileiradas": contador_tarefas_enfileiradas}, 
-                status=status.HTTP_200_OK
+                {
+                    "success": True,
+                    "message": msg,
+                    "tarefas_enfileiradas": contador_tarefas_enfileiradas,
+                },
+                status=status.HTTP_200_OK,
             )
 
-        except Exception as e: 
+        except Exception as e:
             logger.error(
                 f"Erro em SincronizarFornecedoresLoteView para empresa {codi_emp}: {e}",
                 exc_info=True,
@@ -1688,11 +1736,11 @@ class ApplicationLogsView(ListView):
     paginate_by = 50
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('-timestamp')
-        log_level = self.request.GET.get('log_level', '')
-        message_contains = self.request.GET.get('message_contains', '')
-        module_filter = self.request.GET.get('module_filter', '')
-        func_name_filter = self.request.GET.get('func_name_filter', '')
+        queryset = super().get_queryset().order_by("-timestamp")
+        log_level = self.request.GET.get("log_level", "")
+        message_contains = self.request.GET.get("message_contains", "")
+        module_filter = self.request.GET.get("module_filter", "")
+        func_name_filter = self.request.GET.get("func_name_filter", "")
 
         if log_level:
             queryset = queryset.filter(level=log_level)
@@ -1702,49 +1750,59 @@ class ApplicationLogsView(ListView):
             queryset = queryset.filter(module__icontains=module_filter)
         if func_name_filter:
             queryset = queryset.filter(func_name__icontains=func_name_filter)
-        
+
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['log_level_choices'] = ApplicationLog.LEVEL_CHOICES
-        context['current_log_level'] = self.request.GET.get('log_level', '')
-        context['current_message_contains'] = self.request.GET.get('message_contains', '')
-        context['current_module_filter'] = self.request.GET.get('module_filter', '')
-        context['current_func_name_filter'] = self.request.GET.get('func_name_filter', '')
-        context['active_page'] = "logs"
+        context["log_level_choices"] = ApplicationLog.LEVEL_CHOICES
+        context["current_log_level"] = self.request.GET.get("log_level", "")
+        context["current_message_contains"] = self.request.GET.get(
+            "message_contains", ""
+        )
+        context["current_module_filter"] = self.request.GET.get("module_filter", "")
+        context["current_func_name_filter"] = self.request.GET.get(
+            "func_name_filter", ""
+        )
+        context["active_page"] = "logs"
 
         # Preparar query string para paginação, excluindo o parâmetro 'page'
         query_params = self.request.GET.copy()
-        if 'page' in query_params:
-            del query_params['page']
-        context['other_query_params'] = query_params.urlencode()
-        
+        if "page" in query_params:
+            del query_params["page"]
+        context["other_query_params"] = query_params.urlencode()
+
         return context
 
     def post(self, request, *args, **kwargs):
-        action = request.POST.get('action')
-        log_id_to_delete = request.POST.get('log_id')
+        action = request.POST.get("action")
+        log_id_to_delete = request.POST.get("log_id")
 
-        if action == 'delete_log' and log_id_to_delete:
+        if action == "delete_log" and log_id_to_delete:
             try:
                 log_entry = ApplicationLog.objects.get(pk=log_id_to_delete)
                 log_entry.delete()
-                messages.success(request, f"Log ID {log_id_to_delete} excluído com sucesso.")
+                messages.success(
+                    request, f"Log ID {log_id_to_delete} excluído com sucesso."
+                )
             except ApplicationLog.DoesNotExist:
                 messages.error(request, f"Log ID {log_id_to_delete} não encontrado.")
             except Exception as e:
-                messages.error(request, f"Erro ao excluir log ID {log_id_to_delete}: {e}")
-        
-        elif action == 'delete_all_logs': 
+                messages.error(
+                    request, f"Erro ao excluir log ID {log_id_to_delete}: {e}"
+                )
+
+        elif action == "delete_all_logs":
             try:
                 ApplicationLog.objects.all().delete()
-                messages.success(request, "Todos os logs da aplicação foram excluídos com sucesso.")
+                messages.success(
+                    request, "Todos os logs da aplicação foram excluídos com sucesso."
+                )
             except Exception as e:
                 messages.error(request, f"Erro ao excluir todos os logs: {e}")
 
         query_params = request.GET.urlencode()
-        redirect_url = reverse_lazy('sync_logs')
+        redirect_url = reverse_lazy("sync_logs")
         if query_params:
             return redirect(f"{redirect_url}?{query_params}")
         return redirect(redirect_url)

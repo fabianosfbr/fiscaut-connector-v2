@@ -562,7 +562,7 @@ class ODBCConnectionManager:
         name_field_db: str,
         cgce_field_filter_name: str,
         cgce_field_db: str,
-        log_entity_name: str, # ex: "fornecedores", "clientes"
+        log_entity_name: str,  # ex: "fornecedores", "clientes"
     ) -> Dict[str, Any]:
         """
         Método genérico para listar dados de uma fonte, com estrutura de retorno padronizada.
@@ -598,7 +598,9 @@ class ODBCConnectionManager:
                     params_where.append(filters.get(id_field_filter_name))
                 if filters.get(name_field_filter_name):
                     where_clauses_list.append(f"UPPER({name_field_db}) LIKE ?")
-                    params_where.append(f"%{filters.get(name_field_filter_name).upper()}%")
+                    params_where.append(
+                        f"%{filters.get(name_field_filter_name).upper()}%"
+                    )
                 if filters.get(cgce_field_filter_name):
                     where_clauses_list.append(f"{cgce_field_db} = ?")
                     params_where.append(filters.get(cgce_field_filter_name))
