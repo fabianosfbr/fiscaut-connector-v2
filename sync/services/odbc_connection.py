@@ -548,32 +548,30 @@ class ODBCConnectionManager:
             logger.error(f"Erro ao buscar empresa por codi_emp: {str(e)}")
             return None
 
-    def list_fornecedores_empresa(
+    def _list_data_source(
         self,
         codi_emp: int,
-        filters: Optional[Dict[str, Any]] = None,
-        page_number: int = 1,
-        page_size: int = 50,
+        filters: Optional[Dict[str, Any]],
+        page_number: int,
+        page_size: int,
+        source_table_name: str,
+        fields_to_select_str: str,
+        default_order_by_field: str,
+        id_field_filter_name: str,
+        name_field_filter_name: str,
+        name_field_db: str,
+        cgce_field_filter_name: str,
+        cgce_field_db: str,
+        log_entity_name: str, # ex: "fornecedores", "clientes"
     ) -> Dict[str, Any]:
         """
-        Lista fornecedores de uma empresa, com estrutura de retorno padronizada.
-        Filtros e paginação serão aprimorados.
-
-        Args:
-            codi_emp: Código da empresa.
-            filters: Dicionário com filtros (ex: {'f_codi_for': '123', 'f_nome_for': 'nome'}).
-            page_number: Número da página.
-            page_size: Tamanho da página.
-
-        Returns:
-            Dicionário com 'success', 'data', 'total_records', 'current_page', 'page_size', 'total_pages', 'error'.
+        Método genérico para listar dados de uma fonte, com estrutura de retorno padronizada.
         """
         logger.info(
-            f"list_fornecedores_empresa chamada para codi_emp: {codi_emp}, "
+            f"_list_data_source chamada para {log_entity_name}, codi_emp: {codi_emp}, "
             f"filters: {filters}, page: {page_number}, size: {page_size}"
         )
 
-        # Inicializar estrutura de resposta
         response = {
             "success": False,
             "data": [],
@@ -586,41 +584,32 @@ class ODBCConnectionManager:
 
         cnxn = None
         try:
-            conn_str = self.build_connection_string()  # Usa a configuração ativa
+            conn_str = self.build_connection_string()
             cnxn = pyodbc.connect(conn_str, timeout=self.DEFAULT_TIMEOUT)
             cursor = cnxn.cursor()
 
-            # Definições centralizadas para a construção da query
-            fields_to_select_str = "codi_for, cgce_for, nome_for, codi_cta"
-            source_table_name = "bethadba.effornece"
-            primary_filter_condition = "codi_emp = ?"  # Condição principal para buscar fornecedores de uma empresa
-            default_order_by_field = "codi_for"
+            primary_filter_condition = "codi_emp = ?"
+            params_where = [codi_emp]
+            where_clauses_list = []
 
-            params_where = [codi_emp]  # Parâmetro para primary_filter_condition
-            where_clauses_list = []  # Lista para cláusulas de filtros adicionais
-
-            # Aplicar filtros adicionais baseados no argumento 'filters'
             if filters:
-                if filters.get("f_codi_for"):
-                    where_clauses_list.append(
-                        f"{default_order_by_field} = ?"
-                    )  # Assumindo que f_codi_for corresponde ao campo de ordenação/ID
-                    params_where.append(filters.get("f_codi_for"))
-                if filters.get("f_nome_for"):
-                    where_clauses_list.append("UPPER(nome_for) LIKE ?")
-                    params_where.append(f"%{filters.get('f_nome_for').upper()}%")
-                if filters.get("f_cgce_for"):
-                    where_clauses_list.append("cgce_for = ?")
-                    params_where.append(filters.get("f_cgce_for"))
+                if filters.get(id_field_filter_name):
+                    where_clauses_list.append(f"{default_order_by_field} = ?")
+                    params_where.append(filters.get(id_field_filter_name))
+                if filters.get(name_field_filter_name):
+                    where_clauses_list.append(f"UPPER({name_field_db}) LIKE ?")
+                    params_where.append(f"%{filters.get(name_field_filter_name).upper()}%")
+                if filters.get(cgce_field_filter_name):
+                    where_clauses_list.append(f"{cgce_field_db} = ?")
+                    params_where.append(filters.get(cgce_field_filter_name))
 
             where_sql_additional = ""
             if where_clauses_list:
                 where_sql_additional = " AND " + " AND ".join(where_clauses_list)
 
-            # Construir query de contagem
             final_query_count = f"SELECT COUNT(*) FROM {source_table_name} WHERE {primary_filter_condition}{where_sql_additional}"
             logger.debug(
-                f"Query de contagem fornecedores: {final_query_count}, Params: {params_where}"
+                f"Query de contagem {log_entity_name}: {final_query_count}, Params: {params_where}"
             )
             cursor.execute(final_query_count, *params_where)
             count_result = cursor.fetchone()
@@ -635,14 +624,12 @@ class ODBCConnectionManager:
                 start_at = ((page_number - 1) * page_size) + 1
                 order_by_sql = f" ORDER BY {default_order_by_field} ASC"
 
-                # Construir query de seleção paginada
                 paginated_query_select = (
                     f"SELECT TOP {page_size} START AT {start_at} {fields_to_select_str} "
                     f"FROM {source_table_name} WHERE {primary_filter_condition}{where_sql_additional}{order_by_sql}"
                 )
-
                 logger.debug(
-                    f"Query de seleção fornecedores (paginada): {paginated_query_select}, Params: {params_where}"
+                    f"Query de seleção {log_entity_name} (paginada): {paginated_query_select}, Params: {params_where}"
                 )
                 cursor.execute(paginated_query_select, *params_where)
 
@@ -651,7 +638,7 @@ class ODBCConnectionManager:
                 response["data"] = [dict(zip(columns, row)) for row in rows]
                 response["success"] = True
             else:
-                response["success"] = True  # Consulta bem-sucedida, mas sem resultados
+                response["success"] = True
 
             cursor.close()
 
@@ -659,21 +646,124 @@ class ODBCConnectionManager:
             sqlstate = ex.args[0]
             error_message = str(ex)
             logger.error(
-                f"Erro ODBC ao listar fornecedores para empresa {codi_emp}: {sqlstate} - {error_message}"
+                f"Erro ODBC ao listar {log_entity_name} para empresa {codi_emp}: {sqlstate} - {error_message}"
             )
             response["error"] = f"Erro ODBC: {error_message}"
-            # Detalhes do erro podem ser adicionados aqui se necessário, como em test_connection
         except Exception as e:
             error_msg = str(e)
             logger.error(
-                f"Erro inesperado ao listar fornecedores da empresa {codi_emp}: {error_msg}"
+                f"Erro inesperado ao listar {log_entity_name} da empresa {codi_emp}: {error_msg}"
             )
             response["error"] = f"Erro inesperado no sistema: {error_msg}"
         finally:
             if cnxn:
                 cnxn.close()
-
         return response
+
+    def list_fornecedores_empresa(
+        self,
+        codi_emp: int,
+        filters: Optional[Dict[str, Any]] = None,
+        page_number: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Lista fornecedores de uma empresa, com estrutura de retorno padronizada.
+        """
+        return self._list_data_source(
+            codi_emp=codi_emp,
+            filters=filters,
+            page_number=page_number,
+            page_size=page_size,
+            source_table_name="bethadba.effornece",
+            fields_to_select_str="codi_for, cgce_for, nome_for, codi_cta",
+            default_order_by_field="codi_for",
+            id_field_filter_name="f_codi_for",
+            name_field_filter_name="f_nome_for",
+            name_field_db="nome_for",
+            cgce_field_filter_name="f_cgce_for",
+            cgce_field_db="cgce_for",
+            log_entity_name="fornecedores",
+        )
+
+    def list_clientes_empresa(
+        self,
+        codi_emp: int,
+        filters: Optional[Dict[str, Any]] = None,
+        page_number: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Lista clientes de uma empresa, com estrutura de retorno padronizada.
+        """
+        return self._list_data_source(
+            codi_emp=codi_emp,
+            filters=filters,
+            page_number=page_number,
+            page_size=page_size,
+            source_table_name="bethadba.efclientes",
+            fields_to_select_str="codi_cli, cgce_cli, nome_cli, codi_cta",
+            default_order_by_field="codi_cli",
+            id_field_filter_name="f_codi_cli",
+            name_field_filter_name="f_nome_cli",
+            name_field_db="nome_cli",
+            cgce_field_filter_name="f_cgce_cli",
+            cgce_field_db="cgce_cli",
+            log_entity_name="clientes",
+        )
+
+    def list_plano_de_contas_empresa(
+        self,
+        codi_emp: int,
+        filters: Optional[Dict[str, Any]] = None,
+        page_number: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Lista os planos de contas de uma empresa, com estrutura de retorno padronizada.
+        """
+        return self._list_data_source(
+            codi_emp=codi_emp,
+            filters=filters,
+            page_number=page_number,
+            page_size=page_size,
+            source_table_name="bethadba.ctcontas",
+            fields_to_select_str="codi_cta, clas_cta, nome_cta, tipo_cta",
+            default_order_by_field="codi_cta",
+            id_field_filter_name="f_codi_cta",
+            name_field_filter_name="f_nome_cta",
+            name_field_db="nome_cta",
+            # Usando clas_cta como terceiro campo de filtro, similar ao cgce_for/cgce_cli
+            cgce_field_filter_name="f_clas_cta",
+            cgce_field_db="clas_cta",
+            log_entity_name="planos_de_contas",
+        )
+
+    def list_acumuladores_empresa(
+        self,
+        codi_emp: int,
+        filters: Optional[Dict[str, Any]] = None,
+        page_number: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        Lista os acumuladores de uma empresa, com estrutura de retorno padronizada.
+        """
+        return self._list_data_source(
+            codi_emp=codi_emp,
+            filters=filters,
+            page_number=page_number,
+            page_size=page_size,
+            source_table_name="bethadba.efacumuladorese",
+            fields_to_select_str="CODI_ACU, NOME_ACU, DESCRICAO_ACU",
+            default_order_by_field="CODI_ACU",
+            id_field_filter_name="f_codi_acu",
+            name_field_filter_name="f_nome_acu",
+            name_field_db="NOME_ACU",
+            cgce_field_filter_name="f_descricao_acu",
+            cgce_field_db="DESCRICAO_ACU",
+            log_entity_name="acumuladores",
+        )
 
     def list_empresas(
         self,
