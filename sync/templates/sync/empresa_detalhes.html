@@ -57,8 +57,8 @@
                  :class="{
                      'border-green-500': habilitada, 
                      'border-red-500': !habilitada,
-                     'bg-green-50': habilitada,  // Adicionando um leve fundo verde
-                     'bg-red-50': !habilitada    // Adicionando um leve fundo vermelho
+                     'bg-green-50': habilitada,
+                     'bg-red-50': !habilitada
                  }">
                 <h3 class="text-sm font-medium text-gray-500">Status Sincronização</h3>
                 <span :class="{'admin-badge-success': habilitada, 'admin-badge-danger': !habilitada}" class="px-3 py-1 rounded-full text-sm font-medium">
@@ -71,201 +71,338 @@
     <!-- Container para mensagens de notificação -->
     <div id="message-container-detalhes" class="fixed top-5 right-5 z-50 space-y-2"></div>
 
-    {# --- Início da Seção de Fornecedores --- #}
-    <div class="mt-8 pt-6 border-t border-gray-200">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-semibold text-gray-700">Fornecedores da Empresa</h2>            
-            <button @click="iniciarSincronizacaoEmLote()"
-                    class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center whitespace-nowrap"
-                    title="Iniciar a sincronização em lote para fornecedores pendentes (status Não Sincronizado ou Erro) que possuem CNPJ.">
-                <i data-feather="zap" class="w-4 h-4 mr-2"></i>
-                Sincronizar todos os fornecedores
-                <span x-show="isLoadingLote" class="ml-2"><i data-feather="loader" class="animate-spin w-4 h-4"></i></span>
-            </button>
+    <!-- Sistema de Abas -->
+    <div x-data="{ activeTab: 'fornecedores' }" class="mt-8">
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <button @click="activeTab = 'fornecedores'"
+                        :class="activeTab === 'fornecedores' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Fornecedores
+                </button>
+                <button @click="activeTab = 'clientes'"
+                        :class="activeTab === 'clientes' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Clientes
+                </button>
+                <button @click="activeTab = 'planos_contas'"
+                        :class="activeTab === 'planos_contas' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Planos de Contas
+                </button>
+                <button @click="activeTab = 'acumuladores'"
+                        :class="activeTab === 'acumuladores' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Acumuladores
+                </button>
+            </nav>
         </div>
 
-        {# Formulário de Filtros para Fornecedores #}
-        <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
-            {% csrf_token %} {# Embora GET, útil para consistência ou futuras mudanças #}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                <div>
-                    <label for="f_codi_for" class="block text-sm font-medium text-gray-700 mb-1">Cód. Fornecedor</label>
-                    <input type="text" name="f_codi_for" id="f_codi_for" value="{{ current_f_codi_for|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
-                </div>
-                <div>
-                    <label for="f_nome_for" class="block text-sm font-medium text-gray-700 mb-1">Nome do Fornecedor</label>
-                    <input type="text" name="f_nome_for" id="f_nome_for" value="{{ current_f_nome_for|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
-                </div>
-                <div>
-                    <label for="f_cgce_for" class="block text-sm font-medium text-gray-700 mb-1">CNPJ/CGC Fornecedor</label>
-                    <input type="text" name="f_cgce_for" id="f_cgce_for" value="{{ current_f_cgce_for|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
-                </div>
-                <div>
-                    <label for="f_status_sinc" class="block text-sm font-medium text-gray-700 mb-1">Status Sincronização</label>
-                    <select name="f_status_sinc" id="f_status_sinc" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
-                        <option value="todos" {% if current_f_status_sinc == 'todos' or not current_f_status_sinc %}selected{% endif %}>Todos</option>
-                        <option value="NAO_SINCRONIZADO" {% if current_f_status_sinc == 'NAO_SINCRONIZADO' %}selected{% endif %}>Não Sincronizado</option>
-                        <option value="SINCRONIZADO" {% if current_f_status_sinc == 'SINCRONIZADO' %}selected{% endif %}>Sincronizado</option>
-                        <option value="ERRO" {% if current_f_status_sinc == 'ERRO' %}selected{% endif %}>Com Erro</option>
-                    </select>
-                </div>
-                <div class="lg:col-span-4 flex space-x-2 justify-end">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
-                        <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
-                    </button>
-                    <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
-                        <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
-                    </a>
-                </div>
+        {# --- Seção de Fornecedores --- #}
+        <div x-show="activeTab === 'fornecedores'" class="mt-6 pt-6 border-t border-gray-200">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-700">Fornecedores da Empresa</h2>            
+                <button @click="iniciarSincronizacaoEmLote()"
+                        class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center whitespace-nowrap"
+                        title="Iniciar a sincronização em lote para fornecedores pendentes (status Não Sincronizado ou Erro) que possuem CNPJ.">
+                    <i data-feather="zap" class="w-4 h-4 mr-2"></i>
+                    Sincronizar todos os fornecedores
+                    <span x-show="isLoadingLote" class="ml-2"><i data-feather="loader" class="animate-spin w-4 h-4"></i></span>
+                </button>
             </div>
-        </form>
 
-        {# Tabela de Fornecedores #}
-        {% if fornecedores_list %}
-            <div class="overflow-x-auto admin-table-container rounded-lg shadow border border-gray-200">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Forn.</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">CNPJ/CGC</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Conta</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Status Sinc.</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 bg-white">
-                        {% for fornecedor in fornecedores_list %}
-                            <tr id="fornecedor-row-{{ fornecedor.codi_for }}">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_for }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.nome_for }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.cgce_for|default:'-' }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_cta|default:'-' }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                          :class="{
-                                            'bg-green-100 text-green-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'SINCRONIZADO',
-                                            'bg-red-100 text-red-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'ERRO',
-                                            'bg-gray-100 text-gray-800': '{{ fornecedor.status_sincronizacao_raw }}' !== 'SINCRONIZADO' && '{{ fornecedor.status_sincronizacao_raw }}' !== 'ERRO'
-                                          }">
-                                        {{ fornecedor.status_sincronizacao|default:'Não Sincronizado' }}
-                                    </span>
-                                    {% if fornecedor.ultima_tentativa_sinc %}
-                                        <p class="text-xs text-gray-500 mt-1" title="Última tentativa de sincronização">
-                                            {{ fornecedor.ultima_tentativa_sinc|date:"d/m/y H:i" }}
-                                        </p>
-                                    {% endif %}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <button @click="chamarSincronizacaoFornecedor($event)"
-                                            data-codi-for="{{ fornecedor.codi_for }}"
-                                            data-nome-for="{{ fornecedor.nome_for|escapejs }}"
-                                            data-cgce-for="{{ fornecedor.cgce_for|default:'' }}"
-                                            data-codi-cta="{{ fornecedor.codi_cta|default:'' }}"
-                                            class="text-sm flex items-center justify-center px-3 py-1.5 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-200 {% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}bg-green-600 hover:bg-green-700 text-white{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}bg-yellow-500 hover:bg-yellow-600 text-white{% else %}bg-indigo-600 hover:bg-indigo-700 text-white{% endif %}"
-                                            title="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Re-sincronizar este fornecedor{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Tentar sincronizar novamente{% else %}Sincronizar este fornecedor com a API Fiscaut{% endif %}">
-                                        
-                                        <i data-feather="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}check-circle{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}alert-triangle{% else %}refresh-cw{% endif %}" class="w-4 h-4 mr-1.5"></i>
-                                        <span class="inline-block">
-                                            {% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Sincronizado{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Erro Sinc.{% else %}Sincronizar{% endif %}
-                                        </span>
-                                        <i data-feather="loader" class="animate-spin w-4 h-4 ml-1.5 hidden"></i>
-                                    </button>
-                                </td>
+            <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
+                 <input type="hidden" name="tab" value="fornecedores"> {# Para manter a aba ativa após o GET #}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                    <div>
+                        <label for="f_codi_for" class="block text-sm font-medium text-gray-700 mb-1">Cód. Fornecedor</label>
+                        <input type="text" name="f_codi_for" id="f_codi_for" value="{{ current_f_codi_for|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
+                    </div>
+                    <div>
+                        <label for="f_nome_for" class="block text-sm font-medium text-gray-700 mb-1">Nome do Fornecedor</label>
+                        <input type="text" name="f_nome_for" id="f_nome_for" value="{{ current_f_nome_for|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
+                    </div>
+                    <div>
+                        <label for="f_cgce_for" class="block text-sm font-medium text-gray-700 mb-1">CNPJ/CGC Fornecedor</label>
+                        <input type="text" name="f_cgce_for" id="f_cgce_for" value="{{ current_f_cgce_for|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
+                    </div>
+                    <div>
+                        <label for="f_status_sinc" class="block text-sm font-medium text-gray-700 mb-1">Status Sincronização</label>
+                        <select name="f_status_sinc" id="f_status_sinc" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-50">
+                            <option value="todos" {% if current_f_status_sinc == 'todos' or not current_f_status_sinc %}selected{% endif %}>Todos</option>
+                            <option value="NAO_SINCRONIZADO" {% if current_f_status_sinc == 'NAO_SINCRONIZADO' %}selected{% endif %}>Não Sincronizado</option>
+                            <option value="SINCRONIZADO" {% if current_f_status_sinc == 'SINCRONIZADO' %}selected{% endif %}>Sincronizado</option>
+                            <option value="ERRO" {% if current_f_status_sinc == 'ERRO' %}selected{% endif %}>Com Erro</option>
+                        </select>
+                    </div>
+                    <div class="lg:col-span-4 flex space-x-2 justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
+                        </button>
+                        <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}?tab=fornecedores" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            {% if fornecedores_list %}
+                <div class="overflow-x-auto admin-table-container rounded-lg shadow border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Forn.</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">CNPJ/CGC</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Conta</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Status Sinc.</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Ações</th>
                             </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {# Paginação para Fornecedores #}
-            {% if fornecedores_page_obj.paginator.num_pages > 1 %}
-                <div class="mt-6 flex items-center justify-between">
-                    <div class="text-sm text-gray-700">
-                        Mostrando <span class="font-medium">{{ fornecedores_page_obj.start_index }}</span>
-                        a <span class="font-medium">{{ fornecedores_page_obj.end_index }}</span>
-                        de <span class="font-medium">{{ fornecedores_page_obj.paginator.count }}</span> resultados.
-                    </div>
-                    <div class="flex-1 flex justify-end">
-                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Paginação">
-                            {% if fornecedores_page_obj.has_previous %}
-                                <a href="?f_page=1&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
-                                   class="admin-pagination-btn rounded-l-md">
-                                    <span class="sr-only">Primeira</span>
-                                    <i data-feather="chevrons-left" class="h-5 w-5"></i>
-                                </a>
-                                <a href="?f_page={{ fornecedores_page_obj.previous_page_number }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
-                                   class="admin-pagination-btn">
-                                    <span class="sr-only">Anterior</span>
-                                    <i data-feather="chevron-left" class="h-5 w-5"></i>
-                                </a>
-                            {% else %}
-                                <span class="admin-pagination-btn-disabled rounded-l-md">
-                                    <span class="sr-only">Primeira</span>
-                                    <i data-feather="chevrons-left" class="h-5 w-5"></i>
-                                </span>
-                                <span class="admin-pagination-btn-disabled">
-                                    <span class="sr-only">Anterior</span>
-                                    <i data-feather="chevron-left" class="h-5 w-5"></i>
-                                </span>
-                            {% endif %}
-
-                            {% for num in fornecedores_page_obj.paginator.page_range %}
-                                {% if fornecedores_page_obj.number == num %}
-                                    <span aria-current="page" class="admin-pagination-btn-active z-10">
-                                        {{ num }}
-                                    </span>
-                                {% elif num > fornecedores_page_obj.number|add:'-3' and num < fornecedores_page_obj.number|add:'3' %}
-                                    <a href="?f_page={{ num }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
-                                       class="admin-pagination-btn">
-                                        {{ num }}
-                                    </a>
-                                {% elif num == fornecedores_page_obj.paginator.page_range.0 or num == fornecedores_page_obj.paginator.page_range|last %}
-                                    {# Adicionar '...' se houver grande salto de páginas, e sempre mostrar primeira/última se não estiverem no range próximo #}
-                                    {% if num == fornecedores_page_obj.paginator.page_range.0 and fornecedores_page_obj.number|add:'-3' > fornecedores_page_obj.paginator.page_range.0 %}
-                                        <span class="admin-pagination-btn-disabled">...</span>
-                                    {% elif num == fornecedores_page_obj.paginator.page_range|last and fornecedores_page_obj.number|add:'3' < fornecedores_page_obj.paginator.page_range|last %}
-                                        <span class="admin-pagination-btn-disabled">...</span>
-                                    {% endif %}
-                                {% endif %}
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            {% for fornecedor in fornecedores_list %}
+                                <tr id="fornecedor-row-{{ fornecedor.codi_for }}">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_for }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.nome_for }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.cgce_for|default:'-' }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ fornecedor.codi_cta|default:'-' }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                              :class="{
+                                                'bg-green-100 text-green-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'SINCRONIZADO',
+                                                'bg-red-100 text-red-800': '{{ fornecedor.status_sincronizacao_raw }}' === 'ERRO',
+                                                'bg-gray-100 text-gray-800': '{{ fornecedor.status_sincronizacao_raw }}' !== 'SINCRONIZADO' && '{{ fornecedor.status_sincronizacao_raw }}' !== 'ERRO'
+                                              }">
+                                            {{ fornecedor.status_sincronizacao|default:'Não Sincronizado' }}
+                                        </span>
+                                        {% if fornecedor.ultima_tentativa_sinc %}
+                                            <p class="text-xs text-gray-500 mt-1" title="Última tentativa de sincronização">
+                                                {{ fornecedor.ultima_tentativa_sinc|date:"d/m/y H:i" }}
+                                            </p>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button @click="chamarSincronizacaoFornecedor($event)"
+                                                data-codi-for="{{ fornecedor.codi_for }}"
+                                                data-nome-for="{{ fornecedor.nome_for|escapejs }}"
+                                                data-cgce-for="{{ fornecedor.cgce_for|default:'' }}"
+                                                data-codi-cta="{{ fornecedor.codi_cta|default:'' }}"
+                                                class="text-sm flex items-center justify-center px-3 py-1.5 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-200 {% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}bg-green-600 hover:bg-green-700 text-white{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}bg-yellow-500 hover:bg-yellow-600 text-white{% else %}bg-indigo-600 hover:bg-indigo-700 text-white{% endif %}"
+                                                title="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Re-sincronizar este fornecedor{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Tentar sincronizar novamente{% else %}Sincronizar este fornecedor com a API Fiscaut{% endif %}">
+                                            
+                                            <i data-feather="{% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}check-circle{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}alert-triangle{% else %}refresh-cw{% endif %}" class="w-4 h-4 mr-1.5"></i>
+                                            <span class="inline-block">
+                                                {% if fornecedor.status_sincronizacao_raw == 'SINCRONIZADO' %}Sincronizado{% elif fornecedor.status_sincronizacao_raw == 'ERRO' %}Erro Sinc.{% else %}Sincronizar{% endif %}
+                                            </span>
+                                            <i data-feather="loader" class="animate-spin w-4 h-4 ml-1.5 hidden"></i>
+                                        </button>
+                                    </td>
+                                </tr>
                             {% endfor %}
-
-                            {% if fornecedores_page_obj.has_next %}
-                                <a href="?f_page={{ fornecedores_page_obj.next_page_number }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
-                                   class="admin-pagination-btn">
-                                    <span class="sr-only">Próxima</span>
-                                    <i data-feather="chevron-right" class="h-5 w-5"></i>
-                                </a>
-                                <a href="?f_page={{ fornecedores_page_obj.paginator.num_pages }}&f_codi_for={{ current_f_codi_for|default:'' }}&f_nome_for={{ current_f_nome_for|default:'' }}&f_cgce_for={{ current_f_cgce_for|default:'' }}"
-                                   class="admin-pagination-btn rounded-r-md">
-                                    <span class="sr-only">Última</span>
-                                    <i data-feather="chevrons-right" class="h-5 w-5"></i>
-                                </a>
-                            {% else %}
-                                <span class="admin-pagination-btn-disabled">
-                                    <span class="sr-only">Próxima</span>
-                                    <i data-feather="chevron-right" class="h-5 w-5"></i>
-                                </span>
-                                <span class="admin-pagination-btn-disabled rounded-r-md">
-                                    <span class="sr-only">Última</span>
-                                    <i data-feather="chevrons-right" class="h-5 w-5"></i>
-                                </span>
-                            {% endif %}
-                        </nav>
-                    </div>
+                        </tbody>
+                    </table>
+                </div>
+                {% include "sync/partials/pagination_controls.html" with page_obj=fornecedores_page_obj param_prefix="f_" current_filters=request.GET %}
+            {% else %}
+                <div class="text-center py-10">
+                    <i data-feather="info" class="w-12 h-12 mx-auto text-gray-400"></i>
+                    <p class="mt-2 text-sm text-gray-500">
+                        Nenhum fornecedor encontrado para esta empresa{% if current_f_codi_for or current_f_nome_for or current_f_cgce_for or current_f_status_sinc != 'todos' %} com os filtros aplicados{% endif %}.
+                    </p>
                 </div>
             {% endif %}
-        {% else %}
-            <div class="text-center py-10">
-                <i data-feather="info" class="w-12 h-12 mx-auto text-gray-400"></i>
-                <p class="mt-2 text-sm text-gray-500">
-                    Nenhum fornecedor encontrado para esta empresa{% if current_f_codi_for or current_f_nome_for or current_f_cgce_for %} com os filtros aplicados{% endif %}.
-                </p>
-            </div>
-        {% endif %}
-    </div>
-    {# --- Fim da Seção de Fornecedores --- #}
+        </div>
 
+        {# --- Seção de Clientes --- #}
+        <div x-show="activeTab === 'clientes'" class="mt-6 pt-6 border-t border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Clientes da Empresa</h2>
+            
+            <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
+                 <input type="hidden" name="tab" value="clientes">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label for="c_codi_cli" class="block text-sm font-medium text-gray-700 mb-1">Cód. Cliente</label>
+                        <input type="text" name="c_codi_cli" id="c_codi_cli" value="{{ current_c_codi_cli|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="c_nome_cli" class="block text-sm font-medium text-gray-700 mb-1">Nome do Cliente</label>
+                        <input type="text" name="c_nome_cli" id="c_nome_cli" value="{{ current_c_nome_cli|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="c_cgce_cli" class="block text-sm font-medium text-gray-700 mb-1">CNPJ/CGC Cliente</label>
+                        <input type="text" name="c_cgce_cli" id="c_cgce_cli" value="{{ current_c_cgce_cli|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div class="lg:col-span-3 flex space-x-2 justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
+                        </button>
+                        <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}?tab=clientes" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            {% if clientes_list %}
+                <div class="overflow-x-auto admin-table-container rounded-lg shadow border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Cli.</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">CNPJ/CGC</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Conta</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            {% for cliente in clientes_list %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ cliente.codi_cli }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ cliente.nome_cli }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ cliente.cgce_cli|default:'-' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ cliente.codi_cta|default:'-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% include "sync/partials/pagination_controls.html" with page_obj=clientes_page_obj param_prefix="c_" current_filters=request.GET %}
+            {% else %}
+                <div class="text-center py-10">
+                    <i data-feather="users" class="w-12 h-12 mx-auto text-gray-400"></i>
+                    <p class="mt-2 text-sm text-gray-500">
+                        Nenhum cliente encontrado para esta empresa{% if current_c_codi_cli or current_c_nome_cli or current_c_cgce_cli %} com os filtros aplicados{% endif %}.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+
+        {# --- Seção de Planos de Contas --- #}
+        <div x-show="activeTab === 'planos_contas'" class="mt-6 pt-6 border-t border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Planos de Contas da Empresa</h2>
+
+            <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
+                <input type="hidden" name="tab" value="planos_contas">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label for="pc_codi_cta" class="block text-sm font-medium text-gray-700 mb-1">Cód. Conta</label>
+                        <input type="text" name="pc_codi_cta" id="pc_codi_cta" value="{{ current_pc_codi_cta|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="pc_nome_cta" class="block text-sm font-medium text-gray-700 mb-1">Nome da Conta</label>
+                        <input type="text" name="pc_nome_cta" id="pc_nome_cta" value="{{ current_pc_nome_cta|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="pc_clas_cta" class="block text-sm font-medium text-gray-700 mb-1">Classificação</label>
+                        <input type="text" name="pc_clas_cta" id="pc_clas_cta" value="{{ current_pc_clas_cta|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                     <div class="lg:col-span-3 flex space-x-2 justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
+                        </button>
+                        <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}?tab=planos_contas" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            {% if plano_contas_list %}
+                <div class="overflow-x-auto admin-table-container rounded-lg shadow border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Conta</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Classificação</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome Conta</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Tipo</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            {% for plano in plano_contas_list %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ plano.codi_cta }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ plano.clas_cta }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ plano.nome_cta }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ plano.tipo_cta|default:'-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% include "sync/partials/pagination_controls.html" with page_obj=plano_contas_page_obj param_prefix="pc_" current_filters=request.GET %}
+            {% else %}
+                <div class="text-center py-10">
+                    <i data-feather="book-open" class="w-12 h-12 mx-auto text-gray-400"></i>
+                    <p class="mt-2 text-sm text-gray-500">
+                        Nenhum plano de contas encontrado para esta empresa{% if current_pc_codi_cta or current_pc_nome_cta or current_pc_clas_cta %} com os filtros aplicados{% endif %}.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+
+        {# --- Seção de Acumuladores --- #}
+        <div x-show="activeTab === 'acumuladores'" class="mt-6 pt-6 border-t border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Acumuladores da Empresa</h2>
+
+            <form method="GET" action="" class="mb-6 p-4 bg-gray-50 rounded-lg shadow">
+                <input type="hidden" name="tab" value="acumuladores">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label for="ac_codi_acu" class="block text-sm font-medium text-gray-700 mb-1">Cód. Acumulador</label>
+                        <input type="text" name="ac_codi_acu" id="ac_codi_acu" value="{{ current_ac_codi_acu|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="ac_nome_acu" class="block text-sm font-medium text-gray-700 mb-1">Nome do Acumulador</label>
+                        <input type="text" name="ac_nome_acu" id="ac_nome_acu" value="{{ current_ac_nome_acu|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="ac_descricao_acu" class="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                        <input type="text" name="ac_descricao_acu" id="ac_descricao_acu" value="{{ current_ac_descricao_acu|default:'' }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                     <div class="lg:col-span-3 flex space-x-2 justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="filter" class="w-4 h-4 mr-2"></i>Filtrar
+                        </button>
+                        <a href="{% url 'sync_empresa_detalhes' codi_emp=empresa.codi_emp %}?tab=acumuladores" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md shadow-sm flex items-center w-full md:w-auto">
+                            <i data-feather="rotate-ccw" class="w-4 h-4 mr-2"></i>Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            {% if acumuladores_list %}
+                <div class="overflow-x-auto admin-table-container rounded-lg shadow border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Cód. Acum.</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nome</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Descrição</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            {% for acumulador in acumuladores_list %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ acumulador.CODI_ACU }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ acumulador.NOME_ACU }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{{ acumulador.DESCRICAO_ACU|default:'-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% include "sync/partials/pagination_controls.html" with page_obj=acumuladores_page_obj param_prefix="ac_" current_filters=request.GET %}
+            {% else %}
+                <div class="text-center py-10">
+                    <i data-feather="archive" class="w-12 h-12 mx-auto text-gray-400"></i>
+                    <p class="mt-2 text-sm text-gray-500">
+                        Nenhum acumulador encontrado para esta empresa{% if current_ac_codi_acu or current_ac_nome_acu or current_ac_descricao_acu %} com os filtros aplicados{% endif %}.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -278,21 +415,29 @@
             isLoadingToggle: false,
             isLoadingLote: false,
             cnpjEmpresa: cnpjEmpresa,
+            // activeTab é gerenciado pelo x-data no container das abas
 
+            // Função para definir a aba ativa com base no parâmetro URL 'tab'
+            initTabs() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabParam = urlParams.get('tab');
+                if (tabParam) {
+                    this.$root.querySelector('[x-data*="activeTab"]').__x.$data.activeTab = tabParam;
+                }
+            },
             getButtonClass(status) {
                 if (status === 'SINCRONIZADO') {
                     return 'bg-green-600 hover:bg-green-700 text-white';
                 } else if (status === 'ERRO') {
                     return 'bg-yellow-500 hover:bg-yellow-600 text-white';
                 } else {
-                    // Para "NAO_SINCRONIZADO" ou qualquer outro status
                     return 'bg-indigo-600 hover:bg-indigo-700 text-white';
                 }
             },
 
             getCsrfToken() {
                 let tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
-                if (tokenInput) return tokenInput.value; // Pega do form invisível, se houver
+                if (tokenInput) return tokenInput.value;
                 const cookies = document.cookie.split(';');
                 for (let i = 0; i < cookies.length; i++) {
                     let cookie = cookies[i].trim();
@@ -300,12 +445,7 @@
                         return cookie.substring('csrftoken='.length, cookie.length);
                     }
                 }
-                // Adicionar um input CSRF se não existir para garantir que o token está disponível
-                // (geralmente {% csrf_token %} no form principal da página já faria isso)
-                // Se esta página não tiver um form com {% csrf_token %}, precisaremos buscar de outra forma ou garantir que `base.html` o inclua.
-                // Como `sync_empresas_list` tem um form com csrf_token, e esta página extende `base.html`,
-                // pode ser que o token já esteja em um cookie ou no DOM. A busca por cookie é uma boa alternativa.
-                console.warn('CSRF token não encontrado diretamente no form. Tentando via cookie.');
+                console.warn('CSRF token não encontrado.');
                 return null; 
             },
 
@@ -315,7 +455,6 @@
                 const csrfToken = this.getCsrfToken();
 
                 if (!csrfToken) {
-                    console.error('CSRF token não encontrado para toggleSincronizacaoDetalhes!');
                     this.showMessageDetalhes('Erro de segurança (Token CSRF ausente). Tente recarregar a página.', 'error');
                     this.isLoadingToggle = false;
                     return;
@@ -360,7 +499,7 @@
                 } finally {
                     this.isLoadingToggle = false;
                     this.$nextTick(() => {
-                        feather.replace(); // Para atualizar os ícones (loader, check-circle, slash)
+                        feather.replace(); 
                     });
                 }
             },
@@ -372,18 +511,27 @@
                 const cgceFor = button.dataset.cgceFor;
                 const codiCta = button.dataset.codiCta;
 
-                // ... (lógica de UI: spinner, desabilitar botão)
-                const iconLoading = button.querySelector('.animate-spin');
-                const syncTextSpan = button.querySelector('span.inline-block'); // Selecionar o span do texto
+                const iconLoading = button.querySelector('i[data-feather="loader"]');
+                const syncTextSpan = button.querySelector('span.inline-block');
                 const originalButtonText = syncTextSpan.textContent;
+                const mainIcon = button.querySelector('i:not([data-feather="loader"])');
+                const originalIconClass = mainIcon.dataset.feather;
+
                 iconLoading.classList.remove('hidden');
                 syncTextSpan.textContent = 'Sinc...';
+                mainIcon.classList.add('hidden');
                 button.disabled = true;
 
-                console.log(`DEBUG_JS_SINC_FORN: Iniciando sincronização. Empresa: ${this.codiEmp}, CNPJ Empresa: ${this.cnpjEmpresa}, Forn: ${codiFor}, Nome: ${nomeFor}`);
                 const csrfToken = this.getCsrfToken();
-                // ... (validações de CSRF e cnpjEmpresa)
-
+                if (!csrfToken || !this.cnpjEmpresa) {
+                    this.showMessageDetalhes('Erro de configuração interna (CSRF ou CNPJ da empresa ausente).', 'error');
+                    iconLoading.classList.add('hidden');
+                    mainIcon.classList.remove('hidden');
+                    syncTextSpan.textContent = originalButtonText;
+                    button.disabled = false;
+                    return;
+                }
+                let responseData = null; 
                 try {
                     const response = await fetch(`{% url 'sync_api_sincronizar_fornecedor_empresa' %}`, {
                         method: 'POST',
@@ -393,87 +541,51 @@
                         },
                         body: JSON.stringify({
                             cnpj_empresa: this.cnpjEmpresa,
-                            codi_emp: this.codiEmp, // Este é o código numérico da empresa do sistema ODBC
-                            codi_for: codiFor, // Este é o código do fornecedor do sistema ODBC
+                            codi_emp: this.codiEmp,
+                            codi_for: codiFor,
                             nome_fornecedor: nomeFor,
                             cnpj_fornecedor: cgceFor,
                             conta_contabil_fornecedor: codiCta
                         })
                     });
 
-                    const responseData = await response.json().catch(() => {
-                        console.error("DEBUG_JS_SINC_FORN: Resposta da API não é JSON.", response);
+                    responseData = await response.json().catch(() => {
                         return { success: false, message: `Erro HTTP ${response.status} ao sincronizar. Resposta não JSON.` };
                     });
                     
-                    console.log("DEBUG_JS_SINC_FORN: Resposta completa da API:", responseData);
-
                     if (responseData.success) {
                         this.showMessageDetalhes(responseData.message || 'Fornecedor sincronizado com sucesso!', 'success');
-                        // ---- TENTATIVA DE ATUALIZAÇÃO DA UI ----
-                        // Encontrar a linha da tabela e a célula de status para este fornecedor
                         const fornecedorRow = document.getElementById(`fornecedor-row-${codiFor}`);
                         if (fornecedorRow) {
-                            console.log(`DEBUG_JS_SINC_FORN: Tentando atualizar UI para Forn ${codiFor}. Novo status esperado: Sincronizado`);
-                            const statusCell = fornecedorRow.querySelector('td:nth-child(5) span'); // Assumindo que o status é o <span> na 5ª <td>
-                            const statusTextCell = fornecedorRow.querySelector('td:nth-child(5) p.text-xs'); // Para data
-                            if (statusCell) {
-                                statusCell.textContent = 'Sincronizado'; // Texto direto
-                                statusCell.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800'; // Classes para sucesso
-                                console.log("DEBUG_JS_SINC_FORN: Célula de status atualizada para Sincronizado.");
+                            const statusCellSpan = fornecedorRow.querySelector('td:nth-child(5) span.rounded-full');
+                            const statusCellDate = fornecedorRow.querySelector('td:nth-child(5) p.text-xs');
+                            if (statusCellSpan) {
+                                statusCellSpan.textContent = 'Sincronizado';
+                                statusCellSpan.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800';
                             }
-                            if (statusTextCell) { // Atualizar data/hora
-                                statusTextCell.textContent = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            if (statusCellDate) { 
+                                statusCellDate.textContent = new Date().toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit'}) + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
                             }
-
-                            // Atualizar botão
-                            const buttonIcon = button.querySelector('i:not(.animate-spin)');
                             syncTextSpan.textContent = 'Sincronizado';
-                            
-                            // Aplicar classes do novo status
-                            const allColorClasses = 'bg-indigo-600 hover:bg-indigo-700 bg-green-600 hover:bg-green-700 bg-yellow-500 hover:bg-yellow-600 text-white';
-                            button.classList.remove(...allColorClasses.split(' '));
-                            
-                            // Adicionar classes para "SINCRONIZADO"
-                            button.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
-                            
-                            if(buttonIcon) buttonIcon.dataset.feather = 'check-circle';
-                            console.log("DEBUG_JS_SINC_FORN: Botão atualizado para Sincronizado.");
-                        } else {
-                            console.warn(`DEBUG_JS_SINC_FORN: Linha da tabela fornecedor-row-${codiFor} não encontrada para atualização da UI.`);
+                            mainIcon.dataset.feather = 'check-circle';
+                            button.className = button.className.replace(/bg-(indigo|yellow)-[0-9]+ hover:bg-(indigo|yellow)-[0-9]+/g, '') + ' bg-green-600 hover:bg-green-700';
+
                         }
                     } else {
                         this.showMessageDetalhes(responseData.message || 'Falha ao sincronizar fornecedor.', 'error');
-                        // Se falhou, não alteramos o status na UI, a menos que a API retorne um novo status de erro
-                        // Poderíamos adicionar lógica para atualizar para 'Erro' se responseData.details.status_sincronizacao_raw indicar isso
-                        console.log("DEBUG_JS_SINC_FORN: Sincronização falhou segundo a API. UI não alterada para sucesso.");
+                        syncTextSpan.textContent = 'Erro Sinc.';
+                        mainIcon.dataset.feather = 'alert-triangle';
+                        button.className = button.className.replace(/bg-(indigo|green)-[0-9]+ hover:bg-(indigo|green)-[0-9]+/g, '') + ' bg-yellow-500 hover:bg-yellow-600';
+
                     }
 
                 } catch (error) {
-                    console.error('Erro ao chamar sincronização de fornecedor:', error);
                     this.showMessageDetalhes(error.message || 'Erro de comunicação ao tentar sincronizar fornecedor.', 'error');
+                    syncTextSpan.textContent = originalButtonText;
+                    mainIcon.dataset.feather = originalIconClass;
                 } finally {
                     iconLoading.classList.add('hidden');
-                    if (!responseData || !responseData.success) { // Restaurar texto original apenas se falhou
-                         syncTextSpan.textContent = originalButtonText;
-                         // Restaurar classes originais do botão se a API falhou. 
-                         // As classes de :class no HTML devem cuidar de aplicar o estilo correto baseado no status_sincronizacao_raw que não mudou no front-end.
-                         // Remover todas as classes de cor
-                         const allColorClasses = 'bg-indigo-600 hover:bg-indigo-700 bg-green-600 hover:bg-green-700 bg-yellow-500 hover:bg-yellow-600 text-white';
-                         button.classList.remove(...allColorClasses.split(' '));
-                         
-                         // Reabilitar o status original
-                         const originalStatus = button.closest('tr').querySelector('td:nth-child(5) span').textContent.trim() === 'Sincronizado' ? 'SINCRONIZADO' : 
-                                              (button.closest('tr').querySelector('td:nth-child(5) span').textContent.trim().includes('Erro') ? 'ERRO' : 'NAO_SINCRONIZADO');
-                         
-                         if (originalStatus === 'SINCRONIZADO') {
-                             button.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
-                         } else if (originalStatus === 'ERRO') {
-                             button.classList.add('bg-yellow-500', 'hover:bg-yellow-600', 'text-white');
-                         } else {
-                             button.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'text-white');
-                         }
-                    }
+                    mainIcon.classList.remove('hidden');
                     button.disabled = false;
                     this.$nextTick(() => { feather.replace(); });
                 }
@@ -487,7 +599,6 @@
                 const csrfToken = this.getCsrfToken();
 
                 if (!csrfToken) {
-                    console.error('CSRF token não encontrado para iniciarSincronizacaoEmLote!');
                     this.showMessageDetalhes('Erro de segurança (Token CSRF ausente). Tente recarregar a página.', 'error');
                     this.isLoadingLote = false;
                     return;
@@ -506,16 +617,14 @@
                     });
 
                     const responseData = await response.json().catch(() => {
-                        // Se a resposta não for JSON, mas o status for OK, pode ser um erro no backend que não retornou JSON esperado
                         if (!response.ok) throw new Error(`Erro HTTP: ${response.status} - Resposta não JSON ou vazia.`);
                         return { success: response.ok, message: "Resposta da API não era JSON, mas a requisição pode ter sido aceita." }; 
                     });
 
-                    if (!response.ok && !responseData.message) { // Adiciona uma mensagem de erro genérica se não houver uma específica
+                    if (!response.ok && !responseData.message) { 
                          responseData.message = `Falha ao iniciar sincronização em lote. Status: ${response.status}`;
                     }
                     
-                    // Garante que responseData.success reflita o status da resposta HTTP se não definido explicitamente
                     if (typeof responseData.success === 'undefined') {
                         responseData.success = response.ok;
                     }
@@ -532,17 +641,14 @@
                 } finally {
                     this.isLoadingLote = false;
                     this.$nextTick(() => {
-                        feather.replace(); // Para atualizar os ícones (loader)
+                        feather.replace(); 
                     });
                 }
             },
 
             showMessageDetalhes(message, type = 'info') {
                 const container = document.getElementById('message-container-detalhes');
-                if (!container) {
-                    console.warn("Elemento 'message-container-detalhes' não encontrado para exibir mensagem.");
-                    return;
-                }
+                if (!container) return;
                 const messageId = `message-detalhes-${Date.now()}`;
                 
                 let bgColor, textColor, borderColor, icon;
@@ -552,7 +658,7 @@
                     bgColor = 'bg-red-50'; textColor = 'text-red-700'; borderColor = 'border-red-200'; icon = 'alert-circle';
                 } else if (type === 'warning') {
                     bgColor = 'bg-yellow-50'; textColor = 'text-yellow-700'; borderColor = 'border-yellow-200'; icon = 'alert-triangle';
-                } else { // info
+                } else { 
                     bgColor = 'bg-blue-50'; textColor = 'text-blue-700'; borderColor = 'border-blue-200'; icon = 'info';
                 }
 
@@ -562,31 +668,27 @@
                 messageDiv.innerHTML = `
                     <i data-feather="${icon}" class="w-5 h-5 mr-2"></i>
                     <span>${message}</span>
-                    <button onclick="
-                        const elToRemove = document.getElementById('${messageId}');
-                        if (elToRemove) elToRemove.remove();
-                    " class="ml-auto -mx-1.5 -my-1.5 bg-transparent rounded-lg focus:ring-2 focus:ring-gray-400 p-1.5 hover:bg-gray-200 inline-flex h-8 w-8">
+                    <button onclick="this.parentElement.remove()" class="ml-auto -mx-1.5 -my-1.5 bg-transparent rounded-lg focus:ring-2 focus:ring-gray-400 p-1.5 hover:bg-gray-200 inline-flex h-8 w-8">
                         <span class="sr-only">Fechar</span>
                         <i data-feather="x" class="w-5 h-5"></i>
                     </button>
                 `;
                 container.appendChild(messageDiv);
-                this.$nextTick(() => {
-                    feather.replace(); 
-                });
+                this.$nextTick(() => { feather.replace(); });
 
                 setTimeout(() => {
                     const el = document.getElementById(messageId);
                     if (el) el.remove();
-                }, 7000); // Aumentado para 7 segundos
+                }, 7000);
             }
         };
     }
-
-    document.addEventListener('DOMContentLoaded', (event) => {
-        // feather.replace(); // `base.html` já chama feather.replace() no DOMContentLoaded.
-        // Se esta página adicionar ícones dinamicamente fora do escopo de Alpine que já chama feather.replace(),
-        // pode ser necessário aqui, mas o Alpine já chama no `finally` do toggle e `showMessageDetalhes`.
+    document.addEventListener('DOMContentLoaded', () => {
+        // Chama initTabs dentro do contexto AlpineJS após a inicialização
+        const alpineContainer = document.querySelector('[x-data*="empresaDetalhesPage("]');
+        if (alpineContainer && alpineContainer.__x) {
+            alpineContainer.__x.initTabs();
+        }
     });
 </script>
 {% endblock %} 

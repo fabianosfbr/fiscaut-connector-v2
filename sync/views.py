@@ -607,6 +607,20 @@ class EmpresaDetailView(View):
         # Não passamos f_status_sinc para odbc_manager.list_fornecedores_empresa
         # pois o filtro de status será aplicado após o enriquecimento.
 
+        # Construir other_params_f
+        other_params_list_f = []
+        if current_f_codi_for:
+            other_params_list_f.append(f"f_codi_for={current_f_codi_for}")
+        if current_f_nome_for:
+            other_params_list_f.append(f"f_nome_for={current_f_nome_for}")
+        if current_f_cgce_for:
+            other_params_list_f.append(f"f_cgce_for={current_f_cgce_for}")
+        if current_f_status_sinc and current_f_status_sinc != "todos":
+            other_params_list_f.append(f"f_status_sinc={current_f_status_sinc}")
+        
+        other_params_f_str = "&" + "&".join(other_params_list_f) if other_params_list_f else ""
+        context['other_params_f'] = other_params_f_str
+
         logger.debug(
             f"Buscando fornecedores para empresa {codi_emp} com filtros ODBC: {fornecedor_filters}, página: {f_page_number}, filtro status sinc: {current_f_status_sinc}"
         )
@@ -767,6 +781,18 @@ class EmpresaDetailView(View):
         if current_c_cgce_cli:
             cliente_filters["f_cgce_cli"] = current_c_cgce_cli
 
+        # Construir other_params_c
+        other_params_list_c = []
+        if current_c_codi_cli:
+            other_params_list_c.append(f"c_codi_cli={current_c_codi_cli}")
+        if current_c_nome_cli:
+            other_params_list_c.append(f"c_nome_cli={current_c_nome_cli}")
+        if current_c_cgce_cli:
+            other_params_list_c.append(f"c_cgce_cli={current_c_cgce_cli}")
+        
+        other_params_c_str = "&" + "&".join(other_params_list_c) if other_params_list_c else ""
+        context['other_params_c'] = other_params_c_str
+
         logger.debug(
             f"Buscando clientes para empresa {codi_emp} com filtros ODBC: {cliente_filters}, página: {c_page_number}"
         )
@@ -848,6 +874,18 @@ class EmpresaDetailView(View):
             plano_contas_filters["f_nome_cta"] = current_pc_nome_cta
         if current_pc_clas_cta:
             plano_contas_filters["f_clas_cta"] = current_pc_clas_cta
+
+        # Construir other_params_pc
+        other_params_list_pc = []
+        if current_pc_codi_cta:
+            other_params_list_pc.append(f"pc_codi_cta={current_pc_codi_cta}")
+        if current_pc_nome_cta:
+            other_params_list_pc.append(f"pc_nome_cta={current_pc_nome_cta}")
+        if current_pc_clas_cta:
+            other_params_list_pc.append(f"pc_clas_cta={current_pc_clas_cta}")
+        
+        other_params_pc_str = "&" + "&".join(other_params_list_pc) if other_params_list_pc else ""
+        context['other_params_pc'] = other_params_pc_str
 
         logger.debug(
             f"Buscando planos de contas para empresa {codi_emp} com filtros ODBC: {plano_contas_filters}, página: {pc_page_number}"
@@ -936,6 +974,18 @@ class EmpresaDetailView(View):
             acumuladores_filters["f_nome_acu"] = current_ac_nome_acu
         if current_ac_descricao_acu:
             acumuladores_filters["f_descricao_acu"] = current_ac_descricao_acu
+
+        # Construir other_params_ac
+        other_params_list_ac = []
+        if current_ac_codi_acu:
+            other_params_list_ac.append(f"ac_codi_acu={current_ac_codi_acu}")
+        if current_ac_nome_acu:
+            other_params_list_ac.append(f"ac_nome_acu={current_ac_nome_acu}")
+        if current_ac_descricao_acu:
+            other_params_list_ac.append(f"ac_descricao_acu={current_ac_descricao_acu}")
+        
+        other_params_ac_str = "&" + "&".join(other_params_list_ac) if other_params_list_ac else ""
+        context['other_params_ac'] = other_params_ac_str
 
         logger.debug(
             f"Buscando acumuladores para empresa {codi_emp} com filtros ODBC: {acumuladores_filters}, página: {ac_page_number}"

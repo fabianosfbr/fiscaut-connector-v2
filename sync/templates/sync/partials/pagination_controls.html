@@ -1,0 +1,91 @@
+{% comment %}
+Este partial espera as seguintes variáveis de contexto:
+- page_obj: O objeto de página do paginador Django.
+- param_prefix: O prefixo a ser usado para o parâmetro de página na URL (ex: 'f_', 'c_').
+- current_filters: Um QueryDict (request.GET) para pegar o 'tab'.
+- processed_other_params: String com os outros parâmetros já formatados (ex: "&filtro1=valor1&filtro2=valor2")
+{% endcomment %}
+
+{% if page_obj.paginator.num_pages > 1 %}
+    <div class="mt-6 flex items-center justify-between">
+        <div class="text-sm text-gray-700">
+            Mostrando <span class="font-medium">{{ page_obj.start_index }}</span>
+            a <span class="font-medium">{{ page_obj.end_index }}</span>
+            de <span class="font-medium">{{ page_obj.paginator.count }}</span> resultados.
+        </div>
+        <div class="flex-1 flex justify-end">
+            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Paginação">
+                {% comment %} page_param_name será {{ param_prefix }}page {% endcomment %}
+                {% comment %} tab_param será {{ current_filters.tab }} {% endcomment %}
+
+                {% if page_obj.has_previous %}
+                    <a href="?{{ param_prefix }}page=1&tab={{ current_filters.tab }}{{ processed_other_params }}"
+                       class="admin-pagination-btn rounded-l-md">
+                        <span class="sr-only">Primeira</span>
+                        <i data-feather="chevrons-left" class="h-5 w-5"></i>
+                    </a>
+                    <a href="?{{ param_prefix }}page={{ page_obj.previous_page_number }}&tab={{ current_filters.tab }}{{ processed_other_params }}"
+                       class="admin-pagination-btn">
+                        <span class="sr-only">Anterior</span>
+                        <i data-feather="chevron-left" class="h-5 w-5"></i>
+                    </a>
+                {% else %}
+                    <span class="admin-pagination-btn-disabled rounded-l-md">
+                        <span class="sr-only">Primeira</span>
+                        <i data-feather="chevrons-left" class="h-5 w-5"></i>
+                    </span>
+                    <span class="admin-pagination-btn-disabled">
+                        <span class="sr-only">Anterior</span>
+                        <i data-feather="chevron-left" class="h-5 w-5"></i>
+                    </span>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <span aria-current="page" class="admin-pagination-btn-active z-10">
+                            {{ num }}
+                        </span>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <a href="?{{ param_prefix }}page={{ num }}&tab={{ current_filters.tab }}{{ processed_other_params }}"
+                           class="admin-pagination-btn">
+                            {{ num }}
+                        </a>
+                    {% elif num == page_obj.paginator.page_range.first or num == page_obj.paginator.page_range.last %}
+                        {% comment %} Ellipsis logic {% endcomment %}
+                        {% if num == page_obj.paginator.page_range.first and page_obj.number|add:'-3' > page_obj.paginator.page_range.first %}
+                             <a href="?{{ param_prefix }}page={{ page_obj.paginator.page_range.first }}&tab={{ current_filters.tab }}{{ processed_other_params }}" class="admin-pagination-btn">{{ page_obj.paginator.page_range.first }}</a>
+                             <span class="admin-pagination-btn-disabled">...</span>
+                        {% elif num == page_obj.paginator.page_range.last and page_obj.number|add:'3' < page_obj.paginator.page_range.last %}
+                            <span class="admin-pagination-btn-disabled">...</span>
+                            <a href="?{{ param_prefix }}page={{ page_obj.paginator.page_range.last }}&tab={{ current_filters.tab }}{{ processed_other_params }}" class="admin-pagination-btn">{{ page_obj.paginator.page_range.last }}</a>
+                        {% elif num == page_obj.paginator.page_range.first or num == page_obj.paginator.page_range.last %}
+                             <a href="?{{ param_prefix }}page={{ num }}&tab={{ current_filters.tab }}{{ processed_other_params }}" class="admin-pagination-btn">{{ num }}</a>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <a href="?{{ param_prefix }}page={{ page_obj.next_page_number }}&tab={{ current_filters.tab }}{{ processed_other_params }}"
+                       class="admin-pagination-btn">
+                        <span class="sr-only">Próxima</span>
+                        <i data-feather="chevron-right" class="h-5 w-5"></i>
+                    </a>
+                    <a href="?{{ param_prefix }}page={{ page_obj.paginator.num_pages }}&tab={{ current_filters.tab }}{{ processed_other_params }}"
+                       class="admin-pagination-btn rounded-r-md">
+                        <span class="sr-only">Última</span>
+                        <i data-feather="chevrons-right" class="h-5 w-5"></i>
+                    </a>
+                {% else %}
+                    <span class="admin-pagination-btn-disabled">
+                        <span class="sr-only">Próxima</span>
+                        <i data-feather="chevron-right" class="h-5 w-5"></i>
+                    </span>
+                    <span class="admin-pagination-btn-disabled rounded-r-md">
+                        <span class="sr-only">Última</span>
+                        <i data-feather="chevrons-right" class="h-5 w-5"></i>
+                    </span>
+                {% endif %}
+            </nav>
+        </div>
+    </div>
+{% endif %} 
